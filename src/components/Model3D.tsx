@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import { useRef, useEffect } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
@@ -18,7 +18,9 @@ export default function Model3D({ scale = 1, rotationSpeed = 0.01, productId }: 
   const meshRef = useRef<THREE.Mesh>(null);
   
   // Load the model - we're using a single model for demo purposes
-  // In production, you'd load different models based on productId
+  // In production, you'd use productId to select different models
+  // For now, we'll use it to add a tiny variation to the rotation speed for each model
+  const adjustedRotationSpeed = rotationSpeed * (1 + (productId % 5) * 0.1);
   const modelPath = `${GCS_URL}/cake_model_2.glb`;
   const { scene } = useGLTF(modelPath);
   
@@ -33,10 +35,10 @@ export default function Model3D({ scale = 1, rotationSpeed = 0.01, productId }: 
     camera.position.y = 0.5;
   }, [camera]);
   
-  // Rotate the model in the animation loop
+  // Rotate the model in the animation loop with the product-specific adjusted speed
   useFrame(() => {
     if (meshRef.current) {
-      meshRef.current.rotation.y += rotationSpeed;
+      meshRef.current.rotation.y += adjustedRotationSpeed;
     }
   });
   

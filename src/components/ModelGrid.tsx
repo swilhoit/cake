@@ -1,4 +1,4 @@
-import React, { Suspense, useState, useEffect } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import Model3D from './Model3D';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Environment, Html } from '@react-three/drei';
