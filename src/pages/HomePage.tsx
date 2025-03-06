@@ -4,6 +4,7 @@ import { useShopContext } from '../context/ShopContext';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Environment, Html } from '@react-three/drei';
 import Model3D from '../components/Model3D';
+import * as THREE from 'three';
 
 // Mock product data for when Shopify products aren't available
 export const mockProducts = [
@@ -65,10 +66,38 @@ export const mockProducts = [
   }
 ];
 
-// Function to check if the device is mobile
+// Enhanced function to detect device capabilities
+const getDeviceCapabilities = (): { isMobile: boolean, shouldUseImages: boolean, dpr: [number, number] } => {
+  if (typeof window === 'undefined') {
+    return { isMobile: false, shouldUseImages: false, dpr: [1, 2] };
+  }
+  
+  // Check if mobile
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  
+  // Get hardware concurrency (CPU cores)
+  const cpuCores = window.navigator.hardwareConcurrency || 0;
+  
+  // Check for device memory (in GB)
+  const deviceMemory = (navigator as any).deviceMemory || 0;
+  
+  // Determine if we should use images instead of 3D models
+  const shouldUseImages = isMobile && (
+    cpuCores < 4 || 
+    deviceMemory < 2 || 
+    // If Safari mobile, be more conservative as it has more WebGL issues
+    (/iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream)
+  );
+  
+  // Set appropriate device pixel ratio based on device capability
+  const dpr: [number, number] = isMobile ? [1, 1.5] : [1, 2];
+  
+  return { isMobile, shouldUseImages, dpr };
+};
+
+// Original function maintained for backward compatibility
 const isMobileDevice = (): boolean => {
-  if (typeof window === 'undefined') return false;
-  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  return getDeviceCapabilities().isMobile;
 };
 
 // Product card with 3D model
@@ -77,33 +106,56 @@ function ProductCard({ product }: { product: any }) {
   const [isVisible, setIsVisible] = useState(false);
   const [modelError, setModelError] = useState(false);
   const [useFallbackImage, setUseFallbackImage] = useState(false);
-  const isMobile = isMobileDevice();
+  const { isMobile, shouldUseImages, dpr } = getDeviceCapabilities();
+  const [retryCount, setRetryCount] = useState(0);
 
   // Extract product ID from the Shopify handle or use a default ID
   const productId = product.id ? parseInt(product.id.split('/').pop() || '1', 10) : 1;
 
   // For performance on mobile, we might want to use images instead of 3D models
   useEffect(() => {
-    // On very low-end devices, just use images
-    if (isMobile && window.navigator.hardwareConcurrency && window.navigator.hardwareConcurrency < 4) {
+    // If we should use images based on device capability, set fallback image
+    if (shouldUseImages) {
       setUseFallbackImage(true);
       return;
     }
     
-    // Only show the model after a short delay to ensure initial mount is complete
+    // Only show the model after a delay to ensure initial mount is complete
+    // Longer delay on mobile to allow UI to initialize first
+    const delay = isMobile ? 300 : 100;
+    
     const timer = setTimeout(() => {
       setIsVisible(true);
-    }, 100);
+    }, delay);
     
     return () => clearTimeout(timer);
-  }, [isMobile]);
+  }, [isMobile, shouldUseImages]);
+
+  // Handle 3D model error with retry mechanism
+  const handleModelError = () => {
+    console.log(`Model error for product ${productId}, retry: ${retryCount}`);
+    setModelError(true);
+    
+    // Try up to 2 times to reload the model with increasing delays
+    if (retryCount < 2) {
+      const retryDelay = (retryCount + 1) * 1000; // 1s, then 2s
+      
+      setTimeout(() => {
+        setModelError(false);
+        setRetryCount(prev => prev + 1);
+      }, retryDelay);
+    } else {
+      // After retries, fall back to image
+      setUseFallbackImage(true);
+    }
+  };
 
   const handleAddToCart = () => {
     console.log("Adding to cart:", product.title, "variant:", product.variants[0].id);
     addToCart(product.variants[0].id, 1);
   };
 
-  // Get fallback image URL
+  // Get fallback image URL with better error handling
   const getFallbackImageUrl = () => {
     if (product.images && product.images.length > 0) {
       return product.images[0].src;
@@ -132,13 +184,27 @@ function ProductCard({ product }: { product: any }) {
         ) : isVisible && (
           <Canvas
             camera={{ position: [0, 0, 4.0], fov: 30 }}
-            dpr={isMobile ? [1, 1.5] : [1, 2]} // Lower resolution on mobile
+            dpr={dpr} // Dynamic resolution based on device capability
             className="!touch-none" /* Fix for mobile touch handling */
             frameloop={isMobile ? "demand" : "always"} // Only render on demand for mobile
-            onError={() => setModelError(true)}
+            onCreated={({ gl }) => {
+              // Optimize WebGL context
+              gl.setClearColor(new THREE.Color('#f8f9fa'), 0);
+              if ('physicallyCorrectLights' in gl) {
+                (gl as any).physicallyCorrectLights = true;
+              }
+              // Reduce quality for mobile
+              if (isMobile) {
+                gl.shadowMap.enabled = false;
+                if ('powerPreference' in gl) {
+                  (gl as any).powerPreference = "low-power";
+                }
+              }
+            }}
+            onError={handleModelError}
           >
             <ambientLight intensity={0.8} />
-            <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} intensity={1} castShadow />
+            <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} intensity={1} castShadow={!isMobile} />
             
             <Suspense fallback={
               <Html center>
@@ -151,8 +217,8 @@ function ProductCard({ product }: { product: any }) {
             }>
               {!modelError ? (
                 <>
-                  <Model3D scale={1.3} rotationSpeed={0.005} productId={productId} />
-                  <Environment preset="city" />
+                  <Model3D scale={1.3} rotationSpeed={isMobile ? 0.003 : 0.005} productId={productId} />
+                  {!isMobile && <Environment preset="city" />}
                 </>
               ) : (
                 <Html center>
@@ -170,7 +236,8 @@ function ProductCard({ product }: { product: any }) {
               maxPolarAngle={Math.PI / 2}
               minPolarAngle={0}
               rotateSpeed={0.5}
-              enableDamping={false}
+              enableDamping={isMobile ? false : true}
+              dampingFactor={0.1}
             />
           </Canvas>
         )}
