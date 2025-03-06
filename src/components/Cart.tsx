@@ -134,7 +134,7 @@ export default function Cart() {
               <p className="mt-4 text-gray-500">Your cart is empty</p>
               <button 
                 onClick={toggleCart}
-                className="mt-4 bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"
+                className="mt-4 bg-button-gradient text-gray-800 font-medium px-4 py-2 rounded hover:opacity-90 transition shadow-sm"
               >
                 Continue Shopping
               </button>
@@ -153,7 +153,7 @@ export default function Cart() {
             </p>
             <a
               href={cart.webUrl}
-              className="w-full bg-indigo-600 text-white text-center py-3 rounded-md hover:bg-indigo-700 block"
+              className="w-full bg-button-gradient text-gray-800 font-medium text-center py-3 rounded-md hover:opacity-90 transition shadow-sm block"
               target="_blank"
               rel="noopener noreferrer"
             >

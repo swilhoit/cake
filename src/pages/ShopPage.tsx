@@ -133,7 +133,7 @@ function ProductCard({ product }: { product: any }) {
       {/* Add to Cart Button */}
       <div className="px-4 pb-4">
         <button 
-          className="w-full bg-blue-600/80 hover:bg-blue-700 text-white py-2 rounded-md transition"
+          className="w-full bg-button-gradient hover:opacity-90 text-gray-800 font-medium py-2 rounded-md transition shadow-sm"
           onClick={handleAddToCart}
         >
           Add to Cart

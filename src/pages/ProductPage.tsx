@@ -287,7 +287,7 @@ export default function ProductPage() {
             <div className="relative">
               <button
                 onClick={handleAddToCart}
-                className="w-full bg-indigo-600 border border-transparent rounded-md py-3 px-8 flex items-center justify-center text-base font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                className="w-full bg-button-gradient border border-transparent rounded-md py-3 px-8 flex items-center justify-center text-base font-medium text-gray-800 hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-300 shadow-sm"
               >
                 Add to Cart
               </button>

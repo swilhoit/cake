@@ -21,6 +21,9 @@ export default {
         'pastel-blue': '#e1f4f8',
         'pastel-green': '#e1f8e4',
         'pastel-yellow': '#f4f8e1',
+      },
+      backgroundImage: {
+        'button-gradient': 'linear-gradient(to right, #f8e1a0, #f8e1f4)',
       }
     },
   },
