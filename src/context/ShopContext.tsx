@@ -8,10 +8,27 @@ import shopifyClient, {
 } from '../lib/shopify';
 import { mockProducts } from '../pages/HomePage';
 
+// Type definition for variant
+type Variant = {
+  id: string;
+  title?: string;
+  price: string;
+};
+
 // Mock implementation for cart
 class MockCart {
   id: string;
-  lineItems: any[];
+  lineItems: Array<{
+    id: string;
+    title: string;
+    variant: {
+      id: string;
+      title: string;
+      price: string;
+    };
+    quantity: number;
+    image?: any;
+  }>;
   subtotalPrice: string;
   webUrl: string;
   completedAt: null;
@@ -35,8 +52,8 @@ class MockCart {
       for (const variant of product.variants) {
         if (variant.id === variantId) {
           productTitle = product.title;
-          // Check if variant has title property, use Default if not
-          variantTitle = typeof variant.title === 'string' ? variant.title : 'Default';
+          // Handle case when variant doesn't have a title property
+          variantTitle = 'Default';  // Default value
           price = variant.price;
           image = product.images && product.images.length > 0 ? product.images[0] : null;
           break;

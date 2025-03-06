@@ -120,7 +120,7 @@ export default function Model3D({ scale = 1, rotationSpeed = 0.01, productId, is
   }
   
   // Access the camera to adjust its position
-  const { camera, gl } = useThree();
+  const { camera } = useThree();
   
   // Optimize WebGL context for mobile
   useEffect(() => {
@@ -175,7 +175,7 @@ export default function Model3D({ scale = 1, rotationSpeed = 0.01, productId, is
   }, [camera, isDetailView, performanceLevel]);
   
   // Rotate the model - use less frequent updates for low-end devices
-  useFrame((state, delta) => {
+  useFrame(() => {
     if (meshRef.current && isRendered) {
       // On very low-end devices, rotate less frequently
       if (performanceLevel === 'very-low') {
