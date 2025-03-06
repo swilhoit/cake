@@ -81,6 +81,12 @@ function ProductCard({ product }: { product: any }) {
     console.log(`Model error for product ${productId}, retry: ${retryCount}`);
     setModelError(true);
     
+    // Fall back to image immediately in production
+    if (window.location.hostname.includes('vercel.app')) {
+      setUseFallbackImage(true);
+      return;
+    }
+    
     // Try up to 2 times to reload the model with increasing delays
     if (retryCount < 2) {
       const retryDelay = (retryCount + 1) * 1000; // 1s, then 2s
@@ -162,7 +168,12 @@ function ProductCard({ product }: { product: any }) {
             }>
               {!modelError ? (
                 <>
-                  <Model3D scale={1.3} rotationSpeed={isMobile ? 0.003 : 0.005} productId={productId} />
+                  <Model3D 
+                    scale={1.3} 
+                    rotationSpeed={isMobile ? 0.003 : 0.005} 
+                    productId={productId} 
+                    onError={handleModelError}
+                  />
                   {!isMobile && <Environment preset="city" />}
                 </>
               ) : (

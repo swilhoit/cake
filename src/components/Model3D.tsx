@@ -9,10 +9,14 @@ interface Model3DProps {
   rotationSpeed?: number;
   productId: number;
   isDetailView?: boolean;
+  onError?: () => void;
 }
 
 // URL for model files - use local path to avoid CORS issues
 const MODEL_PATH = '/models';
+
+// Set of model files that have been checked and confirmed not to exist
+const nonExistentModels = new Set<string>();
 
 // Enhanced device detection with performance considerations
 const getDevicePerformanceLevel = (): 'high' | 'medium' | 'low' | 'very-low' => {
@@ -46,14 +50,40 @@ const getDevicePerformanceLevel = (): 'high' | 'medium' | 'low' | 'very-low' => 
   return 'high';
 };
 
+// Check if we're in a production environment
+const isProduction = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  
+  return window.location.hostname.includes('vercel.app') || 
+         window.location.hostname.includes('netlify.app') ||
+         !window.location.hostname.includes('localhost');
+};
+
 // Model cache to avoid reloading the same models
 const modelCache: Record<string, THREE.Group> = {};
 
-export default function Model3D({ scale = 1, rotationSpeed = 0.01, productId, isDetailView = false }: Model3DProps) {
+// Basic cube model as a fallback when no models can be loaded
+const createFallbackCube = (): THREE.Group => {
+  const group = new THREE.Group();
+  const geometry = new THREE.BoxGeometry(1, 1, 1);
+  const material = new THREE.MeshBasicMaterial({ color: 0xffccaa });
+  const mesh = new THREE.Mesh(geometry, material);
+  group.add(mesh);
+  return group;
+};
+
+export default function Model3D({ 
+  scale = 1, 
+  rotationSpeed = 0.01, 
+  productId, 
+  isDetailView = false,
+  onError 
+}: Model3DProps) {
   // Use a reference to the mesh to manipulate it in the render loop
   const meshRef = useRef<THREE.Mesh>(null);
   const [isRendered, setIsRendered] = useState(false);
   const [modelLoaded, setModelLoaded] = useState(false);
+  const [modelLoadFailed, setModelLoadFailed] = useState(false);
   const performanceLevel = getDevicePerformanceLevel();
   
   // Optimize based on device performance level
@@ -101,23 +131,43 @@ export default function Model3D({ scale = 1, rotationSpeed = 0.01, productId, is
   
   // Select model file based on performance
   const modelPath = `${MODEL_PATH}/${settings.modelFile}`;
+
+  // If in production or the model has already been checked and doesn't exist, use fallback
+  const useFallbackModel = isProduction() || nonExistentModels.has(modelPath);
   
-  // Attempt to load from cache first
-  const cachedModel = modelCache[modelPath];
-  let model: THREE.Group;
-  
-  if (cachedModel) {
-    model = cachedModel.clone();
-    // Use the cached model immediately
-    if (!modelLoaded) setModelLoaded(true);
-  } else {
-    // Use suspense to load the model if not cached
-    const { scene } = useGLTF(modelPath);
-    model = scene;
-    
-    // Store in cache for future use
-    modelCache[modelPath] = scene.clone();
-  }
+  // Use a fallback model in production or if the model file doesn't exist
+  const model = useFallbackModel 
+    ? createFallbackCube()
+    : (() => {
+        try {
+          // Attempt to load from cache first
+          const cachedModel = modelCache[modelPath];
+          if (cachedModel) {
+            // Use the cached model immediately
+            if (!modelLoaded) setModelLoaded(true);
+            return cachedModel.clone();
+          } else {
+            // Use suspense to load the model if not cached
+            try {
+              const { scene } = useGLTF(modelPath);
+              // Store in cache for future use
+              modelCache[modelPath] = scene.clone();
+              return scene;
+            } catch (error) {
+              console.error(`Failed to load model ${modelPath}:`, error);
+              nonExistentModels.add(modelPath);
+              setModelLoadFailed(true);
+              if (onError) onError();
+              return createFallbackCube();
+            }
+          }
+        } catch (error) {
+          console.error('Error loading or creating model:', error);
+          setModelLoadFailed(true);
+          if (onError) onError();
+          return createFallbackCube();
+        }
+      })();
   
   // Access the camera to adjust its position
   const { camera } = useThree();
@@ -165,6 +215,11 @@ export default function Model3D({ scale = 1, rotationSpeed = 0.01, productId, is
     setIsRendered(true);
     setModelLoaded(true);
     
+    // Notify parent if model failed to load
+    if (modelLoadFailed && onError) {
+      onError();
+    }
+    
     // Cleanup when component unmounts
     return () => {
       // Release references to help garbage collection
@@ -172,7 +227,7 @@ export default function Model3D({ scale = 1, rotationSpeed = 0.01, productId, is
         meshRef.current = null;
       }
     };
-  }, [camera, isDetailView, performanceLevel]);
+  }, [camera, isDetailView, performanceLevel, modelLoadFailed, onError]);
   
   // Rotate the model - use less frequent updates for low-end devices
   useFrame(() => {
@@ -189,7 +244,7 @@ export default function Model3D({ scale = 1, rotationSpeed = 0.01, productId, is
   });
   
   // Clone the model to ensure each instance is independent
-  const clonedModel = model.clone();
+  const clonedModel = model instanceof THREE.Group ? model.clone() : createFallbackCube();
   
   // For low-end devices, simplify the material to improve performance
   if ((performanceLevel === 'low' || performanceLevel === 'very-low') && clonedModel) {
