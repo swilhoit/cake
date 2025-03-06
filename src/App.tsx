@@ -5,6 +5,7 @@ import Cart from './components/Cart';
 import HomePage from './pages/HomePage';
 import ShopPage from './pages/ShopPage';
 import ProductPage from './pages/ProductPage';
+import PageTransition from './components/PageTransition';
 
 function App() {
   return (
@@ -15,20 +16,22 @@ function App() {
           <Cart />
           
           <main className="flex-1">
-            <Routes>
-              <Route path="/" element={<HomePage />} />
-              <Route path="/shop" element={<ShopPage />} />
-              <Route path="/product/:id" element={<ProductPage />} />
-              {/* Add more routes as needed */}
-              <Route path="*" element={
-                <div className="container mx-auto px-4 py-16 text-center">
-                  <h1 className="text-3xl font-bold text-gray-800 mb-4">Page Not Found</h1>
-                  <p className="text-lg text-gray-600">
-                    The page you're looking for doesn't exist or has been moved.
-                  </p>
-                </div>
-              } />
-            </Routes>
+            <PageTransition>
+              <Routes>
+                <Route path="/" element={<HomePage />} />
+                <Route path="/shop" element={<ShopPage />} />
+                <Route path="/product/:id" element={<ProductPage />} />
+                {/* Add more routes as needed */}
+                <Route path="*" element={
+                  <div className="container mx-auto px-4 py-16 text-center">
+                    <h1 className="text-3xl font-bold text-gray-800 mb-4">Page Not Found</h1>
+                    <p className="text-lg text-gray-600">
+                      The page you're looking for doesn't exist or has been moved.
+                    </p>
+                  </div>
+                } />
+              </Routes>
+            </PageTransition>
           </main>
           
           <footer className="py-8 bg-transparent">

@@ -70,11 +70,16 @@ function ProductCard({ product }: { product: any }) {
     return () => clearTimeout(timer);
   }, [isMobile, shouldUseImages]);
 
-  // Extract product ID from the Shopify handle or use a default numeric ID
+  // Use the sequentialId from the product if available, otherwise extract from the original ID
   const productId = 
-    product.id ? 
-    parseInt(product.id.split('/').pop() || '1', 10) : 
-    1;
+    product.sequentialId ? 
+    product.sequentialId : 
+    parseInt(product.id.split('/').pop() || '1', 10);
+  
+  // Log which product is using which model ID
+  useEffect(() => {
+    console.log(`Product "${product.title}" using 3D model ID: ${productId}`);
+  }, [product.title, productId]);
 
   // Handle 3D model error with retry mechanism
   const handleModelError = () => {
@@ -111,7 +116,7 @@ function ProductCard({ product }: { product: any }) {
     if (product.images && product.images.length > 0) {
       return product.images[0].src;
     }
-    // Use a placeholder based on product ID
+    // Use a local placeholder based on product ID
     return `/images/cake-${(productId % 4) + 1}.jpg`;
   };
 
@@ -119,16 +124,23 @@ function ProductCard({ product }: { product: any }) {
     <div className="backdrop-blur-sm overflow-hidden flex flex-col border border-gray-200/20 rounded-lg transition-all duration-300 hover:border-blue-300/30">
       {/* 3D Model or Fallback Image */}
       <div className="relative h-80 w-full">
+        {/* Card index indicator for debugging */}
+        <div className="absolute top-2 left-2 z-10 bg-black/60 text-white px-2 py-1 rounded text-xs">
+          Model: {productId}
+        </div>
+        
         {useFallbackImage ? (
           // Fallback image for mobile or low-end devices
           <div className="w-full h-full bg-gray-100">
             <img 
               src={getFallbackImageUrl()} 
-              alt={product.title} 
+              alt={product.title}
               className="w-full h-full object-cover"
               onError={(e) => {
-                // If image fails to load, use a placeholder
-                (e.target as HTMLImageElement).src = 'https://via.placeholder.com/300x300?text=Cake';
+                // If the image fails to load, use a very simple colored div as fallback
+                const target = e.target as HTMLImageElement;
+                target.style.display = 'none';
+                target.parentElement!.style.backgroundColor = `hsl(${(productId * 30) % 360}, 70%, 80%)`;
               }}
             />
           </div>
@@ -227,13 +239,41 @@ export default function ShopPage() {
   
   useEffect(() => {
     // If there are Shopify products, use them; otherwise, use mock data
+    let productsToDisplay = [];
+    
     if (!loading && products && products.length > 0) {
-      setDisplayedProducts(products);
+      productsToDisplay = products;
       console.log("Using Shopify products in ShopPage:", products.length);
     } else if (!loading) {
-      setDisplayedProducts(mockProducts);
+      productsToDisplay = mockProducts;
       console.log("Using mock products in ShopPage since no Shopify products available");
     }
+    
+    // Sort products by their extracted ID to ensure sequential order
+    const sortedProducts = productsToDisplay.slice().sort((a, b) => {
+      const idA = parseInt(a.id.split('/').pop() || '1', 10);
+      const idB = parseInt(b.id.split('/').pop() || '1', 10);
+      return idA - idB;
+    });
+    
+    // Ensure each product has a sequential numeric index
+    const productsWithSequentialIds = sortedProducts.map((product, index) => {
+      // Add a sequentialId property that starts at 1
+      return {
+        ...product,
+        sequentialId: index + 1
+      };
+    });
+    
+    console.log("Products with sequential IDs:", 
+      productsWithSequentialIds.map(p => ({ 
+        title: p.title, 
+        originalId: p.id, 
+        sequentialId: p.sequentialId 
+      }))
+    );
+    
+    setDisplayedProducts(productsWithSequentialIds);
   }, [products, loading]);
 
   if (loading) {

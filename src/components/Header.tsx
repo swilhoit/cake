@@ -23,17 +23,21 @@ export default function Header() {
           
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-8">
-            <Link to="/" className="text-gray-700 hover:text-indigo-600 transition-colors">
+            <Link to="/" className="text-gray-700 hover:text-indigo-600 relative group transition-colors duration-300">
               Home
+              <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-indigo-600 transition-all duration-300 group-hover:w-full"></span>
             </Link>
-            <Link to="/shop" className="text-gray-700 hover:text-indigo-600 transition-colors">
+            <Link to="/shop" className="text-gray-700 hover:text-indigo-600 relative group transition-colors duration-300">
               Shop
+              <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-indigo-600 transition-all duration-300 group-hover:w-full"></span>
             </Link>
-            <Link to="/about" className="text-gray-700 hover:text-indigo-600 transition-colors">
+            <Link to="/about" className="text-gray-700 hover:text-indigo-600 relative group transition-colors duration-300">
               About
+              <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-indigo-600 transition-all duration-300 group-hover:w-full"></span>
             </Link>
-            <Link to="/contact" className="text-gray-700 hover:text-indigo-600 transition-colors">
+            <Link to="/contact" className="text-gray-700 hover:text-indigo-600 relative group transition-colors duration-300">
               Contact
+              <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-indigo-600 transition-all duration-300 group-hover:w-full"></span>
             </Link>
             <CartIcon />
           </div>
@@ -64,41 +68,45 @@ export default function Header() {
           </div>
         </div>
         
-        {/* Mobile Menu */}
-        {isMenuOpen && (
-          <div className="md:hidden mt-4 bg-white/90 backdrop-blur-sm rounded-lg shadow-lg p-4">
+        {/* Mobile Menu - Always render but control visibility with CSS */}
+        <div 
+          className={`md:hidden overflow-hidden transition-all duration-300 ease-in-out ${
+            isMenuOpen ? 'max-h-60 opacity-100 mt-4' : 'max-h-0 opacity-0'
+          }`}
+        >
+          <div className="bg-white/90 backdrop-blur-sm rounded-lg shadow-lg p-4">
             <nav className="flex flex-col space-y-3">
               <Link 
                 to="/"
-                className="text-gray-700 hover:text-indigo-600 transition-colors py-2 px-3 rounded hover:bg-gray-50"
+                className="text-gray-700 hover:text-indigo-600 transition-all duration-200 py-2 px-3 rounded hover:bg-gray-50 hover:pl-5"
                 onClick={() => setIsMenuOpen(false)}
               >
                 Home
               </Link>
               <Link 
                 to="/shop"
-                className="text-gray-700 hover:text-indigo-600 transition-colors py-2 px-3 rounded hover:bg-gray-50"
+                className="text-gray-700 hover:text-indigo-600 transition-all duration-200 py-2 px-3 rounded hover:bg-gray-50 hover:pl-5"
                 onClick={() => setIsMenuOpen(false)}
               >
                 Shop
               </Link>
               <Link 
                 to="/about"
-                className="text-gray-700 hover:text-indigo-600 transition-colors py-2 px-3 rounded hover:bg-gray-50"
+                className="text-gray-700 hover:text-indigo-600 transition-all duration-200 py-2 px-3 rounded hover:bg-gray-50 hover:pl-5"
                 onClick={() => setIsMenuOpen(false)}
               >
                 About
               </Link>
               <Link 
                 to="/contact"
-                className="text-gray-700 hover:text-indigo-600 transition-colors py-2 px-3 rounded hover:bg-gray-50"
+                className="text-gray-700 hover:text-indigo-600 transition-all duration-200 py-2 px-3 rounded hover:bg-gray-50 hover:pl-5"
                 onClick={() => setIsMenuOpen(false)}
               >
                 Contact
               </Link>
             </nav>
           </div>
-        )}
+        </div>
       </div>
     </header>
   );

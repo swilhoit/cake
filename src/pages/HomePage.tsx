@@ -166,7 +166,7 @@ function ProductCard({ product }: { product: any }) {
     if (product.images && product.images.length > 0) {
       return product.images[0].src;
     }
-    // Use a placeholder based on product ID
+    // Use a local placeholder based on product ID
     return `/images/cake-${(productId % 4) + 1}.jpg`;
   };
 
@@ -179,11 +179,13 @@ function ProductCard({ product }: { product: any }) {
           <div className="w-full h-full bg-gray-100">
             <img 
               src={getFallbackImageUrl()} 
-              alt={product.title} 
+              alt={product.title}
               className="w-full h-full object-cover"
               onError={(e) => {
-                // If image fails to load, use a placeholder
-                (e.target as HTMLImageElement).src = 'https://via.placeholder.com/300x300?text=Cake';
+                // If the image fails to load, use a very simple colored div as fallback
+                const target = e.target as HTMLImageElement;
+                target.style.display = 'none';
+                target.parentElement!.style.backgroundColor = `hsl(${(productId * 30) % 360}, 70%, 80%)`;
               }}
             />
           </div>

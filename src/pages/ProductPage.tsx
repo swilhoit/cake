@@ -1,4 +1,4 @@
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useShopContext } from '../context/ShopContext';
 import { fetchProductById } from '../lib/shopify';
@@ -6,6 +6,7 @@ import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Environment, Html } from '@react-three/drei';
 import Model3D from '../components/Model3D';
 import * as THREE from 'three';
+import { mockProducts } from '../pages/HomePage';
 
 // Mock gallery images for when the real product doesn't have images
 const mockImages = [
@@ -49,6 +50,23 @@ const getDeviceCapabilities = (): { isMobile: boolean, shouldUseImages: boolean,
   return { isMobile, shouldUseImages, dpr };
 };
 
+// Check if the Shopify configuration has been updated from the placeholder values
+const isShopifyConfigured = () => {
+  try {
+    // This assumes shopifyClient is exported from lib/shopify
+    const domain = (window as any).shopifyClient?.config?.domain;
+    const token = (window as any).shopifyClient?.config?.storefrontAccessToken;
+    
+    return !(
+      domain === 'YOUR_STORE_NAME.myshopify.com' ||
+      token === 'YOUR_STOREFRONT_API_TOKEN'
+    );
+  } catch (error) {
+    console.error('Error checking Shopify configuration:', error);
+    return false;
+  }
+};
+
 export default function ProductPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -63,6 +81,7 @@ export default function ProductPage() {
   const { addToCart } = useShopContext();
   const { isMobile, shouldUseImages, dpr } = getDeviceCapabilities();
   const [retryCount, setRetryCount] = useState(0);
+  const [use3DModel, setUse3DModel] = useState(true);
 
   // For performance on mobile, check if we should use fallback images
   useEffect(() => {
@@ -102,27 +121,91 @@ export default function ProductPage() {
       
       setLoading(true);
       
+      // Function to find a mock product if needed
+      const findMockProduct = (productId: string) => {
+        const numericId = parseInt(productId, 10);
+        return mockProducts.find(p => {
+          const mockId = parseInt(p.id.split('/').pop() || '0', 10);
+          return mockId === numericId;
+        });
+      };
+      
       try {
-        // First try to fetch from Shopify
-        const fetchedProduct = await fetchProductById(id);
+        // Check if using mock data (either by choice or because Shopify is not configured)
+        const usingMockData = !isShopifyConfigured();
         
-        if (fetchedProduct) {
-          setProduct(fetchedProduct);
+        if (usingMockData) {
+          console.log("Using mock product data instead of Shopify");
+          const mockProduct = findMockProduct(id);
           
-          // Set the first variant as the selected one
-          if (fetchedProduct.variants && fetchedProduct.variants.length > 0) {
-            setSelectedVariant(fetchedProduct.variants[0]);
+          if (mockProduct) {
+            setProduct(mockProduct);
+            
+            // Set the first variant as the selected one
+            if (mockProduct.variants && mockProduct.variants.length > 0) {
+              setSelectedVariant(mockProduct.variants[0]);
+            }
+            
+            console.log("Mock product loaded:", mockProduct.title);
+          } else {
+            console.error("Failed to find mock product with ID:", id);
+            navigate('/shop');
+          }
+        } else {
+          // Try to fetch from Shopify
+          // Check if id is just a number (from URL parameter)
+          // If so, reconstruct the full Shopify ID format
+          let fullProductId = id;
+          if (/^\d+$/.test(id)) {
+            fullProductId = `gid://shopify/Product/${id}`;
+            console.log("Reconstructed product ID:", fullProductId);
           }
           
-          console.log("Product fetched successfully:", fetchedProduct.title);
-        } else {
-          console.error("Failed to fetch product");
-          // If we couldn't get the product, go back to shop
-          navigate('/shop');
+          const fetchedProduct = await fetchProductById(fullProductId);
+          
+          if (fetchedProduct) {
+            setProduct(fetchedProduct);
+            
+            // Set the first variant as the selected one
+            if (fetchedProduct.variants && fetchedProduct.variants.length > 0) {
+              setSelectedVariant(fetchedProduct.variants[0]);
+            }
+            
+            console.log("Product fetched successfully:", fetchedProduct.title);
+          } else {
+            console.error("Failed to fetch product from Shopify, trying mock data");
+            const mockProduct = findMockProduct(id);
+            
+            if (mockProduct) {
+              setProduct(mockProduct);
+              
+              if (mockProduct.variants && mockProduct.variants.length > 0) {
+                setSelectedVariant(mockProduct.variants[0]);
+              }
+              
+              console.log("Fallback to mock product:", mockProduct.title);
+            } else {
+              console.error("Could not find product in mock data either");
+              navigate('/shop');
+            }
+          }
         }
       } catch (error) {
-        console.error("Error fetching product:", error);
-        navigate('/shop');
+        console.error("Error in product loading process:", error);
+        
+        // Try to use mock data as fallback
+        const mockProduct = findMockProduct(id);
+        if (mockProduct) {
+          setProduct(mockProduct);
+          
+          if (mockProduct.variants && mockProduct.variants.length > 0) {
+            setSelectedVariant(mockProduct.variants[0]);
+          }
+          
+          console.log("Error recovery: Using mock product:", mockProduct.title);
+        } else {
+          navigate('/shop');
+        }
       } finally {
         setLoading(false);
       }
@@ -171,7 +254,48 @@ export default function ProductPage() {
   };
   
   // Extract numeric product ID for model rotation
-  const productId = id ? parseInt(id.split('-').pop() || '1', 10) : 1;
+  const extractProductId = () => {
+    if (!id) return 1;
+    
+    // If it's already a number, use it
+    if (/^\d+$/.test(id)) {
+      return parseInt(id, 10);
+    }
+    
+    // If it's a Shopify ID format (gid://shopify/Product/X), extract the numeric part
+    const match = id.match(/\/Product\/(\d+)$/);
+    if (match && match[1]) {
+      return parseInt(match[1], 10);
+    }
+    
+    // If it's stored in the product object and has Shopify format
+    if (product?.id) {
+      const productMatch = product.id.toString().match(/\/Product\/(\d+)$/);
+      if (productMatch && productMatch[1]) {
+        return parseInt(productMatch[1], 10);
+      }
+    }
+    
+    // Fallback to a sequential ID based on the product title if available
+    if (product?.title) {
+      // Use the length of the title as a simple hash
+      return product.title.length % 10 + 1;
+    }
+    
+    // Ultimate fallback
+    return 1;
+  };
+
+  const productId = extractProductId();
+  
+  // Generate mock images for when product images are unavailable or as fallbacks
+  const mockImages = useMemo(() => {
+    const baseId = productId || 1;
+    return [
+      `/images/cake-${(baseId % 4) + 1}.jpg`,
+      `/images/cake-${((baseId + 1) % 4) + 1}.jpg`,
+    ];
+  }, [productId]);
   
   if (loading) {
     return (
