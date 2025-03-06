@@ -32,6 +32,34 @@ npm install
 npm run dev
 ```
 
+## CORS Configuration for 3D Models
+
+This application loads 3D models from Google Cloud Storage. If you encounter CORS errors, you have two options:
+
+### Option 1: Configure Google Cloud Storage CORS
+
+1. Create a `cors-config.json` file:
+```json
+[
+  {
+    "origin": ["http://localhost:5173", "http://localhost:5174", "https://your-domain.com"],
+    "method": ["GET", "HEAD", "OPTIONS"],
+    "responseHeader": ["Content-Type", "Access-Control-Allow-Origin"],
+    "maxAgeSeconds": 3600
+  }
+]
+```
+
+2. Apply the configuration:
+```bash
+gcloud storage buckets update gs://your-bucket-name --cors-file=cors-config.json
+```
+
+### Option 2: Use Local Models
+
+The application will automatically fall back to local models in the `public/models/` directory if external models fail to load.
+
 ## Notes
 
-The 3D models displayed in this application are stored externally and loaded at runtime.
+- 3D models are primarily stored externally and loaded at runtime
+- Fallback to local models is available for development purposes
