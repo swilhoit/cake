@@ -5,19 +5,37 @@ import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Environment, Html } from '@react-three/drei';
 import { Suspense, useState, useEffect } from 'react';
 
+// Import mock products from HomePage to maintain consistency
+import { mockProducts } from './HomePage';
+
+// Function to check if the device is mobile
+const isMobileDevice = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+};
+
 function ProductCard({ product }: { product: any }) {
   const { addToCart } = useShopContext();
   const [isVisible, setIsVisible] = useState(false);
   const [modelError, setModelError] = useState(false);
+  const [useFallbackImage, setUseFallbackImage] = useState(false);
+  const isMobile = isMobileDevice();
 
-  // Only show the model after a short delay to ensure initial mount is complete
+  // For performance on mobile, we might want to use images instead of 3D models
   useEffect(() => {
+    // On very low-end devices, just use images
+    if (isMobile && window.navigator.hardwareConcurrency && window.navigator.hardwareConcurrency < 4) {
+      setUseFallbackImage(true);
+      return;
+    }
+    
+    // Only show the model after a short delay to ensure initial mount is complete
     const timer = setTimeout(() => {
       setIsVisible(true);
     }, 100);
     
     return () => clearTimeout(timer);
-  }, []);
+  }, [isMobile]);
 
   // Extract product ID from the Shopify handle or use a default numeric ID
   const productId = 
@@ -25,15 +43,43 @@ function ProductCard({ product }: { product: any }) {
     parseInt(product.id.split('/').pop() || '1', 10) : 
     1;
 
+  const handleAddToCart = () => {
+    console.log("Adding to cart from ShopPage:", product.title, "variant:", product.variants[0].id);
+    addToCart(product.variants[0].id, 1);
+  };
+
+  // Get fallback image URL
+  const getFallbackImageUrl = () => {
+    if (product.images && product.images.length > 0) {
+      return product.images[0].src;
+    }
+    // Use a placeholder based on product ID
+    return `/images/cake-${(productId % 4) + 1}.jpg`;
+  };
+
   return (
     <div className="backdrop-blur-sm overflow-hidden flex flex-col border border-gray-200/20 rounded-lg transition-all duration-300 hover:border-blue-300/30">
-      {/* 3D Model Display */}
+      {/* 3D Model Display or Fallback Image */}
       <div className="relative h-80 w-full">
-        {isVisible && (
+        {useFallbackImage ? (
+          // Fallback image for mobile or low-end devices
+          <div className="w-full h-full bg-gray-100">
+            <img 
+              src={getFallbackImageUrl()} 
+              alt={product.title} 
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                // If image fails to load, use a placeholder
+                (e.target as HTMLImageElement).src = 'https://via.placeholder.com/300x300?text=Cake';
+              }}
+            />
+          </div>
+        ) : isVisible && (
           <Canvas
             camera={{ position: [0, 0, 4.0], fov: 30 }}
-            dpr={[1, 2]}
+            dpr={isMobile ? [1, 1.5] : [1, 2]} // Lower resolution on mobile
             className="!touch-none" /* Fix for mobile touch handling */
+            frameloop={isMobile ? "demand" : "always"} // Only render on demand for mobile
             onError={() => setModelError(true)}
           >
             <ambientLight intensity={0.8} />
@@ -88,7 +134,7 @@ function ProductCard({ product }: { product: any }) {
       <div className="px-4 pb-4">
         <button 
           className="w-full bg-blue-600/80 hover:bg-blue-700 text-white py-2 rounded-md transition"
-          onClick={() => addToCart(product.variants[0].id, 1)}
+          onClick={handleAddToCart}
         >
           Add to Cart
         </button>
@@ -99,6 +145,18 @@ function ProductCard({ product }: { product: any }) {
 
 export default function ShopPage() {
   const { products, loading } = useShopContext();
+  const [displayedProducts, setDisplayedProducts] = useState<any[]>([]);
+  
+  useEffect(() => {
+    // If there are Shopify products, use them; otherwise, use mock data
+    if (!loading && products && products.length > 0) {
+      setDisplayedProducts(products);
+      console.log("Using Shopify products in ShopPage:", products.length);
+    } else if (!loading) {
+      setDisplayedProducts(mockProducts);
+      console.log("Using mock products in ShopPage since no Shopify products available");
+    }
+  }, [products, loading]);
 
   if (loading) {
     return (
@@ -119,12 +177,12 @@ export default function ShopPage() {
       
       {/* Products Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {products.map((product: any) => (
+        {displayedProducts.map((product: any) => (
           <ProductCard key={product.id} product={product} />
         ))}
       </div>
       
-      {products.length === 0 && (
+      {displayedProducts.length === 0 && (
         <div className="text-center py-12">
           <h2 className="text-xl text-gray-600">No products available</h2>
           <p className="text-gray-500 mt-2">

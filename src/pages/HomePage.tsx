@@ -5,33 +5,136 @@ import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Environment, Html } from '@react-three/drei';
 import Model3D from '../components/Model3D';
 
+// Mock product data for when Shopify products aren't available
+export const mockProducts = [
+  { 
+    id: 'gid://shopify/Product/1', 
+    title: 'Premium Chocolate Cake', 
+    description: 'Rich chocolate cake with ganache frosting',
+    variants: [{ id: 'variant1', price: '29.99' }],
+    images: [] 
+  },
+  { 
+    id: 'gid://shopify/Product/2', 
+    title: 'Vanilla Birthday Cake', 
+    description: 'Classic vanilla cake with buttercream frosting',
+    variants: [{ id: 'variant2', price: '24.99' }],
+    images: [] 
+  },
+  { 
+    id: 'gid://shopify/Product/3', 
+    title: 'Red Velvet Deluxe', 
+    description: 'Elegant red velvet cake with cream cheese frosting',
+    variants: [{ id: 'variant3', price: '34.99' }],
+    images: [] 
+  },
+  { 
+    id: 'gid://shopify/Product/4', 
+    title: 'Strawberry Dream', 
+    description: 'Light strawberry cake with fresh berries',
+    variants: [{ id: 'variant4', price: '32.99' }],
+    images: [] 
+  },
+  { 
+    id: 'gid://shopify/Product/5', 
+    title: 'Lemon Blueberry Cake', 
+    description: 'Zesty lemon cake with blueberry compote',
+    variants: [{ id: 'variant5', price: '27.99' }],
+    images: [] 
+  },
+  { 
+    id: 'gid://shopify/Product/6', 
+    title: 'Caramel Drizzle Cake', 
+    description: 'Butter cake with caramel drizzle and toffee bits',
+    variants: [{ id: 'variant6', price: '29.99' }],
+    images: [] 
+  },
+  { 
+    id: 'gid://shopify/Product/7', 
+    title: 'Carrot Spice Cake', 
+    description: 'Moist carrot cake with spices and cream cheese frosting',
+    variants: [{ id: 'variant7', price: '26.99' }],
+    images: [] 
+  },
+  { 
+    id: 'gid://shopify/Product/8', 
+    title: 'Coconut Paradise Cake', 
+    description: 'Coconut cake with coconut cream and toasted coconut flakes',
+    variants: [{ id: 'variant8', price: '31.99' }],
+    images: [] 
+  }
+];
+
+// Function to check if the device is mobile
+const isMobileDevice = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+};
+
 // Product card with 3D model
 function ProductCard({ product }: { product: any }) {
   const { addToCart } = useShopContext();
   const [isVisible, setIsVisible] = useState(false);
   const [modelError, setModelError] = useState(false);
+  const [useFallbackImage, setUseFallbackImage] = useState(false);
+  const isMobile = isMobileDevice();
 
   // Extract product ID from the Shopify handle or use a default ID
   const productId = product.id ? parseInt(product.id.split('/').pop() || '1', 10) : 1;
 
-  // Only show the model after a short delay to ensure initial mount is complete
+  // For performance on mobile, we might want to use images instead of 3D models
   useEffect(() => {
+    // On very low-end devices, just use images
+    if (isMobile && window.navigator.hardwareConcurrency && window.navigator.hardwareConcurrency < 4) {
+      setUseFallbackImage(true);
+      return;
+    }
+    
+    // Only show the model after a short delay to ensure initial mount is complete
     const timer = setTimeout(() => {
       setIsVisible(true);
     }, 100);
     
     return () => clearTimeout(timer);
-  }, []);
+  }, [isMobile]);
+
+  const handleAddToCart = () => {
+    console.log("Adding to cart:", product.title, "variant:", product.variants[0].id);
+    addToCart(product.variants[0].id, 1);
+  };
+
+  // Get fallback image URL
+  const getFallbackImageUrl = () => {
+    if (product.images && product.images.length > 0) {
+      return product.images[0].src;
+    }
+    // Use a placeholder based on product ID
+    return `/images/cake-${(productId % 4) + 1}.jpg`;
+  };
 
   return (
     <div className="backdrop-blur-sm overflow-hidden flex flex-col border border-gray-200/20 rounded-lg transition-all duration-300 hover:border-blue-300/30">
-      {/* 3D Model Canvas */}
+      {/* 3D Model or Fallback Image */}
       <div className="relative h-80 w-full">
-        {isVisible && (
+        {useFallbackImage ? (
+          // Fallback image for mobile or low-end devices
+          <div className="w-full h-full bg-gray-100">
+            <img 
+              src={getFallbackImageUrl()} 
+              alt={product.title} 
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                // If image fails to load, use a placeholder
+                (e.target as HTMLImageElement).src = 'https://via.placeholder.com/300x300?text=Cake';
+              }}
+            />
+          </div>
+        ) : isVisible && (
           <Canvas
             camera={{ position: [0, 0, 4.0], fov: 30 }}
-            dpr={[1, 2]}
+            dpr={isMobile ? [1, 1.5] : [1, 2]} // Lower resolution on mobile
             className="!touch-none" /* Fix for mobile touch handling */
+            frameloop={isMobile ? "demand" : "always"} // Only render on demand for mobile
             onError={() => setModelError(true)}
           >
             <ambientLight intensity={0.8} />
@@ -86,7 +189,7 @@ function ProductCard({ product }: { product: any }) {
       <div className="px-4 pb-4">
         <button 
           className="w-full bg-blue-600/80 hover:bg-blue-700 text-white py-2 rounded-md transition"
-          onClick={() => addToCart(product.variants[0].id, 1)}
+          onClick={handleAddToCart}
         >
           Add to Cart
         </button>
@@ -97,33 +200,25 @@ function ProductCard({ product }: { product: any }) {
 
 export default function HomePage() {
   const { products, loading } = useShopContext();
+  const [displayedProducts, setDisplayedProducts] = useState<any[]>([]);
+  
+  useEffect(() => {
+    // If there are Shopify products, use them; otherwise, use mock data
+    if (!loading && products && products.length > 0) {
+      setDisplayedProducts(products);
+      console.log("Using Shopify products:", products.length);
+    } else if (!loading) {
+      setDisplayedProducts(mockProducts);
+      console.log("Using mock products since no Shopify products available");
+    }
+  }, [products, loading]);
   
   return (
     <div>
-      {/* Hero Section */}
-      <section className="relative">
-        <div className="bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 h-96 md:h-[600px]">
-          <div className="container mx-auto px-4 h-full flex flex-col justify-center items-center text-center">
-            <h1 className="text-4xl md:text-6xl font-bold text-white mb-6">
-              Delicious Custom Cakes
-            </h1>
-            <p className="text-xl md:text-2xl text-white mb-8 max-w-2xl">
-              Browse our premium collection of beautifully crafted custom cakes for any occasion
-            </p>
-            <Link 
-              to="/shop" 
-              className="bg-white text-indigo-600 px-8 py-3 rounded-md font-medium hover:bg-gray-100 transition-colors"
-            >
-              Shop Now
-            </Link>
-          </div>
-        </div>
-      </section>
-      
       {/* Product Grid Section */}
-      <section className="py-16">
+      <section className="py-12">
         <div className="container mx-auto px-4">
-          <div className="text-center mb-12">
+          <div className="text-center mb-10">
             <h2 className="text-3xl font-bold text-gray-800">Our Collection</h2>
             <p className="text-gray-600 mt-2">
               Explore our beautifully crafted custom cakes
@@ -136,9 +231,15 @@ export default function HomePage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {products.map((product: any) => (
+              {displayedProducts.map((product: any) => (
                 <ProductCard key={product.id} product={product} />
               ))}
+            </div>
+          )}
+          
+          {displayedProducts.length === 0 && !loading && (
+            <div className="text-center py-12">
+              <p className="text-gray-600">No products available at the moment.</p>
             </div>
           )}
           

@@ -1,6 +1,9 @@
 import { useRef, useEffect } from 'react';
 import { useShopContext } from '../context/ShopContext';
 
+// Placeholder image for when product images aren't available
+const PLACEHOLDER_IMAGE = 'https://via.placeholder.com/80?text=Cake';
+
 export default function Cart() {
   const { isCartOpen, toggleCart, cart, removeFromCart, updateCartItem } = useShopContext();
   const cartRef = useRef<HTMLDivElement>(null);
@@ -32,6 +35,17 @@ export default function Cart() {
     };
   }, [isCartOpen]);
 
+  // Get image source for a cart item
+  const getItemImage = (item: any): string => {
+    if (item.variant && item.variant.image && item.variant.image.src) {
+      return item.variant.image.src;
+    }
+    
+    // Use product ID to determine which cake model we'd show
+    const productId = item.variant ? item.variant.id.split('/').pop() : '1';
+    return `/images/cake-${productId % 4 + 1}.jpg`;
+  };
+
   if (!isCartOpen) return null;
 
   return (
@@ -58,17 +72,14 @@ export default function Cart() {
             cart.lineItems.map((item: any) => (
               <div key={item.id} className="flex border-b py-4">
                 <div className="w-20 h-20 flex-shrink-0 bg-gray-100 rounded overflow-hidden">
-                  {item.variant.image ? (
-                    <img 
-                      src={item.variant.image.src} 
-                      alt={item.title}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-gray-400">
-                      No image
-                    </div>
-                  )}
+                  <img 
+                    src={getItemImage(item)}
+                    alt={item.title}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = PLACEHOLDER_IMAGE;
+                    }}
+                  />
                 </div>
                 
                 <div className="ml-4 flex-1">
