@@ -163,10 +163,10 @@ export default function ProductPage() {
   return (
     <div className="container mx-auto px-4 py-16">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        {/* 3D Model Viewer and Image Gallery */}
-        <div className="space-y-4">
+        {/* 3D Model Viewer */}
+        <div>
           {/* 3D Model Viewer */}
-          <div className="relative h-96 md:h-[500px] border rounded-lg overflow-hidden bg-gray-50">
+          <div className="relative h-96 md:h-[500px] border rounded-lg overflow-hidden bg-transparent">
             <Canvas
               camera={{ position: [0, 0, 5.5], fov: 35 }}
               className="w-full h-full"
@@ -221,27 +221,6 @@ export default function ProductPage() {
                 Drag to rotate • Pinch to zoom
               </div>
             </div>
-          </div>
-          
-          {/* Image Gallery Thumbnails */}
-          <div className="flex space-x-2 overflow-x-auto pb-2">
-            {productImages.map((imageSrc: string, index: number) => (
-              <div 
-                key={index} 
-                className="w-20 h-20 flex-shrink-0 border rounded-md overflow-hidden cursor-pointer hover:border-indigo-500 transition-colors"
-                onClick={() => handleImageClick(imageSrc)}
-              >
-                <img 
-                  src={imageSrc} 
-                  alt={`Product image ${index + 1}`} 
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    // If image fails to load, set a placeholder
-                    (e.target as HTMLImageElement).src = 'https://via.placeholder.com/80?text=Cake';
-                  }}
-                />
-              </div>
-            ))}
           </div>
         </div>
         
