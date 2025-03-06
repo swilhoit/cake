@@ -1,65 +1,122 @@
-# KG Bakery 3D Model Showcase
+# KG Bakery - 3D Cake Models with Shopify Integration
 
-A React application that showcases 3D cake models in a beautiful 4x4 grid layout with a pastel animated background.
+This project showcases a modern e-commerce website for KG Bakery featuring interactive 3D cake models integrated with Shopify as a CMS and shopping cart platform.
 
 ## Features
 
-- 4x4 grid of interactive 3D cake models
-- Animated pastel background with smooth gradient transitions
-- Transparent glass-like product cards
-- Responsive design
-- Built with React, Vite, TypeScript, and Tailwind CSS
+- Interactive 3D cake models with rotation and zoom capabilities
+- Seamless Shopify integration for product management and checkout
+- Responsive design for all device sizes
+- Product detail pages with customization options
+- Shopping cart functionality
+- Beautiful UI with smooth animations
 
-## Technologies Used
+## Setup Instructions
 
-- React
-- TypeScript
-- Vite
-- Tailwind CSS for styling
-- Three.js for 3D rendering
-- React Three Fiber as a React renderer for Three.js
-- React Three Drei for helpful Three.js components
+### Prerequisites
+
+- Node.js (v14 or higher)
+- npm or yarn
+- A Shopify store (or a development store)
+- Shopify Storefront API access token
+
+### Installation
+
+1. Clone the repository
+   ```bash
+   git clone <repository-url>
+   cd cakes
+   ```
+
+2. Install dependencies
+   ```bash
+   npm install
+   ```
+
+3. Configure Shopify integration
+   Open `src/lib/shopify.ts` and replace the placeholder values with your actual Shopify store information:
+   ```typescript
+   const shopifyClient = Client.buildClient({
+     domain: 'YOUR_STORE_NAME.myshopify.com', // Replace with your Shopify store domain
+     storefrontAccessToken: 'YOUR_STOREFRONT_API_TOKEN', // Replace with your Storefront API access token
+     apiVersion: '2023-01', // Update with current API version if needed
+   });
+   ```
+
+4. Start the development server
+   ```bash
+   npm run dev
+   ```
+
+### Obtaining Shopify Access Tokens
+
+1. Log in to your Shopify admin dashboard
+2. Go to Apps > Develop apps
+3. Create a new app (if you don't have one already)
+4. Under API credentials, create a Storefront API access token
+5. Copy the token and use it in the configuration
+
+## 3D Models
+
+The application uses glTF models for the 3D cake displays. The models are loaded from Google Cloud Storage by default:
+
+```typescript
+const GCS_URL = 'https://storage.googleapis.com/kgbakerycakes';
+```
+
+To use your own models:
+1. Update the URL in `src/components/Model3D.tsx`
+2. Ensure your models are in glTF format (.glb or .gltf)
+3. Make sure the model IDs match the product IDs from Shopify
+
+## Shopify Product Setup
+
+For best results with the 3D models:
+
+1. Create products in your Shopify admin
+2. Add high-quality images for each product
+3. Make sure to provide detailed descriptions
+4. Create variants if your cakes have different options
+5. Add tags to categorize your products
+
+## Pages
+
+- **Home**: Features a hero section and grid of 3D cake models
+- **Shop**: Displays all available products with 3D models
+- **Product Detail**: Shows a larger 3D model with product information and purchase options
 
 ## Development
 
-To run this project locally:
+### File Structure
+
+- `src/components/`: React components including 3D models
+- `src/context/`: Context providers for state management
+- `src/lib/`: Utility functions and API integrations
+- `src/pages/`: Main application pages
+- `public/`: Static assets
+
+### Libraries Used
+
+- React
+- Three.js (via @react-three/fiber and @react-three/drei)
+- Shopify Buy SDK
+- React Router
+- Tailwind CSS
+
+## Deployment
+
+Build the project for production:
 
 ```bash
-# Install dependencies
-npm install
-
-# Start the development server
-npm run dev
+npm run build
 ```
 
-## CORS Configuration for 3D Models
+The built files will be in the `dist/` directory, ready to be deployed to your hosting provider.
 
-This application loads 3D models from Google Cloud Storage. If you encounter CORS errors, you have two options:
+## Contributing
 
-### Option 1: Configure Google Cloud Storage CORS
+Contributions are welcome! Please feel free to submit a Pull Request.
 
-1. Create a `cors-config.json` file:
-```json
-[
-  {
-    "origin": ["http://localhost:5173", "http://localhost:5174", "https://your-domain.com"],
-    "method": ["GET", "HEAD", "OPTIONS"],
-    "responseHeader": ["Content-Type", "Access-Control-Allow-Origin"],
-    "maxAgeSeconds": 3600
-  }
-]
-```
+## License
 
-2. Apply the configuration:
-```bash
-gcloud storage buckets update gs://your-bucket-name --cors-file=cors-config.json
-```
-
-### Option 2: Use Local Models
-
-The application will automatically fall back to local models in the `public/models/` directory if external models fail to load.
-
-## Notes
-
-- 3D models are primarily stored externally and loaded at runtime
-- Fallback to local models is available for development purposes
+This project is licensed under the MIT License - see the LICENSE file for details.

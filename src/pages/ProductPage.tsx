@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useParams } from 'react-router-dom';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Environment } from '@react-three/drei';
+import { OrbitControls, Environment, Html } from '@react-three/drei';
 import { fetchProductById } from '../lib/shopify';
 import Model3D from '../components/Model3D';
 import { useShopContext } from '../context/ShopContext';
@@ -12,6 +12,7 @@ export default function ProductPage() {
   const [loading, setLoading] = useState(true);
   const [selectedVariant, setSelectedVariant] = useState<any>(null);
   const [quantity, setQuantity] = useState(1);
+  const [modelError, setModelError] = useState(false);
   const { addToCart } = useShopContext();
 
   useEffect(() => {
@@ -70,6 +71,9 @@ export default function ProductPage() {
     );
   }
 
+  // Extract numeric product ID for the 3D model
+  const productId = parseInt(id || '1', 10);
+
   return (
     <div className="container mx-auto px-4 py-16">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -78,19 +82,54 @@ export default function ProductPage() {
           <Canvas
             camera={{ position: [0, 0, 4.0], fov: 30 }}
             className="w-full h-full"
+            onError={() => setModelError(true)}
           >
             <ambientLight intensity={0.8} />
             <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} intensity={1} castShadow />
             
-            <Model3D 
-              scale={2} 
-              rotationSpeed={0.005}
-              productId={parseInt(id || '1', 10)} 
-            />
+            <Suspense fallback={
+              <Html center>
+                <div className="flex items-center justify-center">
+                  <div className="text-sm text-blue-500 bg-blue-50 px-3 py-2 rounded-full">
+                    Loading cake model...
+                  </div>
+                </div>
+              </Html>
+            }>
+              {!modelError ? (
+                <>
+                  <Model3D 
+                    scale={2.2} 
+                    rotationSpeed={0.003}
+                    productId={productId} 
+                  />
+                  <Environment preset="city" />
+                </>
+              ) : (
+                <Html center>
+                  <div className="flex items-center justify-center">
+                    <div className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-full">
+                      Failed to load model
+                    </div>
+                  </div>
+                </Html>
+              )}
+            </Suspense>
             
-            <Environment preset="city" />
-            <OrbitControls enableZoom={true} enablePan={false} />
+            <OrbitControls 
+              enableZoom={true} 
+              enablePan={false}
+              maxPolarAngle={Math.PI / 1.5}
+              minPolarAngle={0}
+              dampingFactor={0.1}
+              rotateSpeed={0.5}
+            />
           </Canvas>
+          <div className="absolute bottom-4 left-0 right-0 text-center">
+            <div className="inline-block bg-white/70 backdrop-blur-sm px-3 py-1 rounded-full text-sm text-gray-700">
+              Drag to rotate • Pinch to zoom
+            </div>
+          </div>
         </div>
         
         {/* Product Information */}
@@ -159,13 +198,17 @@ export default function ProductPage() {
           <div className="mt-10">
             <h2 className="text-lg font-medium text-gray-900">Details</h2>
             <div className="mt-4 border-t border-gray-200 pt-4">
-              <ul className="space-y-2">
-                {product.tags && product.tags.map((tag: string, index: number) => (
-                  <li key={index} className="text-gray-600">
-                    {tag}
-                  </li>
-                ))}
-              </ul>
+              {product.tags && product.tags.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {product.tags.map((tag: string, index: number) => (
+                    <span key={index} className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-indigo-100 text-indigo-800">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-gray-500">No additional details available</p>
+              )}
             </div>
           </div>
         </div>

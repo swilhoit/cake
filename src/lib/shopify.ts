@@ -3,8 +3,9 @@ import Client from 'shopify-buy';
 // Create a Shopify client
 // Replace with your actual Shopify store domain and Storefront API access token
 const shopifyClient = Client.buildClient({
-  domain: 'your-store-name.myshopify.com',
-  storefrontAccessToken: 'your-storefront-api-access-token',
+  domain: 'YOUR_STORE_NAME.myshopify.com', // Replace with your Shopify store domain
+  storefrontAccessToken: 'YOUR_STOREFRONT_API_TOKEN', // Replace with your Storefront API access token
+  apiVersion: '2023-01', // Using a recent API version - update if needed
 });
 
 // Export the client for use in other parts of the application

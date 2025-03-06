@@ -43,7 +43,7 @@ function ProductCard({ product }: { product: any }) {
               <Html center>
                 <div className="flex items-center justify-center">
                   <div className="text-sm text-blue-500 bg-blue-50 px-3 py-2 rounded-full">
-                    Loading model...
+                    Loading cake model...
                   </div>
                 </div>
               </Html>
