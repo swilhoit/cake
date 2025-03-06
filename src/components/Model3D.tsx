@@ -11,8 +11,8 @@ interface Model3DProps {
   isDetailView?: boolean;
 }
 
-// Define the Google Cloud Storage bucket URL
-const GCS_URL = 'https://storage.googleapis.com/kgbakerycakes';
+// URL for model files - use local path to avoid CORS issues
+const MODEL_PATH = '/models';
 
 // Enhanced device detection with performance considerations
 const getDevicePerformanceLevel = (): 'high' | 'medium' | 'low' | 'very-low' => {
@@ -100,7 +100,7 @@ export default function Model3D({ scale = 1, rotationSpeed = 0.01, productId, is
   const finalScale = settings.scale;
   
   // Select model file based on performance
-  const modelPath = `${GCS_URL}/${settings.modelFile}`;
+  const modelPath = `${MODEL_PATH}/${settings.modelFile}`;
   
   // Attempt to load from cache first
   const cachedModel = modelCache[modelPath];

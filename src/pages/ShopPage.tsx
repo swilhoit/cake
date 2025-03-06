@@ -24,13 +24,18 @@ const getDeviceCapabilities = (): { isMobile: boolean, shouldUseImages: boolean,
   // Check for device memory (in GB)
   const deviceMemory = (navigator as any).deviceMemory || 0;
   
+  // Always use images in deployed environment to avoid potential CORS issues
+  const isDeployedEnvironment = window.location.hostname.includes('vercel.app');
+  
   // Determine if we should use images instead of 3D models
-  const shouldUseImages = isMobile && (
-    cpuCores < 4 || 
-    deviceMemory < 2 || 
-    // If Safari mobile, be more conservative as it has more WebGL issues
-    (/iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream)
-  );
+  const shouldUseImages = 
+    isDeployedEnvironment || // Always use images in production for now
+    isMobile && (
+      cpuCores < 4 || 
+      deviceMemory < 2 || 
+      // If Safari mobile, be more conservative as it has more WebGL issues
+      (/iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream)
+    );
   
   // Set appropriate device pixel ratio based on device capability
   const dpr: [number, number] = isMobile ? [1, 1.5] : [1, 2];
