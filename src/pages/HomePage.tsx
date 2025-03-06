@@ -95,14 +95,6 @@ const getDeviceCapabilities = (): { isMobile: boolean, shouldUseImages: boolean,
   return { isMobile, shouldUseImages, dpr };
 };
 
-/**
- * @deprecated Use getDeviceCapabilities().isMobile instead
- */
-// Original function maintained for backward compatibility
-const isMobileDevice = (): boolean => {
-  return getDeviceCapabilities().isMobile;
-};
-
 // Product card with 3D model
 function ProductCard({ product }: { product: any }) {
   const { addToCart } = useShopContext();

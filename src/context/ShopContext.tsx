@@ -8,13 +8,6 @@ import shopifyClient, {
 } from '../lib/shopify';
 import { mockProducts } from '../pages/HomePage';
 
-// Type definition for variant
-type Variant = {
-  id: string;
-  title?: string;
-  price: string;
-};
-
 // Mock implementation for cart
 class MockCart {
   id: string;

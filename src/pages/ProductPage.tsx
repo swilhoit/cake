@@ -44,14 +44,6 @@ const getDeviceCapabilities = (): { isMobile: boolean, shouldUseImages: boolean,
   return { isMobile, shouldUseImages, dpr };
 };
 
-/**
- * @deprecated Use getDeviceCapabilities().isMobile instead
- */
-// Original function maintained for backward compatibility
-const isMobileDevice = (): boolean => {
-  return getDeviceCapabilities().isMobile;
-};
-
 export default function ProductPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
