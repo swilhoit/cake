@@ -391,8 +391,8 @@ function BanhMiModelSmall({ rotateRight }: { rotateRight: boolean }) {
     setRetryCount(0);
   }, []);
   
-  // Model URL - use a cake model that is consistent with the others
-  const modelUrl = "https://storage.googleapis.com/kgbakerycakes/cake_model_1.glb";
+  // Model URL - use the specific Banh Mi model URL
+  const modelUrl = "https://storage.googleapis.com/kgbakerycakes/banhmi.glb";
   
   // Memoize the Canvas component to prevent unnecessary re-renders
   return useMemo(() => (
