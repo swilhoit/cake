@@ -358,41 +358,40 @@ export default function HomePage() {
 
 // Smaller Banh Mi model optimized for the marquee
 function BanhMiModelSmall({ rotateRight }: { rotateRight: boolean }) {
-  // Instead of always using a fallback box, attempt to load the model
+  // State for model loading
   const [modelLoaded, setModelLoaded] = useState(false);
   const [modelError, setModelError] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   
-  // Handle model error with retry
+  // Enhanced error handling for the Banh Mi model
   const handleModelError = useCallback(() => {
-    console.error("BanhMi model failed to load");
+    console.error("BanhMi model failed to load - retrying");
     setModelError(true);
     
-    // In production, only do a single retry attempt to prevent excessive requests
-    const maxRetries = typeof window !== 'undefined' && 
-                      window.location.hostname.includes('vercel.app') ? 0 : 1;
-    
-    // Implement retry logic with short delays
-    if (retryCount < maxRetries) {
-      const delay = 500 * (retryCount + 1);
-      console.log(`Retrying BanhMi model in ${delay}ms (attempt ${retryCount + 1}/${maxRetries + 1})`);
+    // Reset and try again regardless of environment
+    if (retryCount < 3) {
+      const delay = 500;
+      console.log(`Retrying BanhMi model in ${delay}ms (attempt ${retryCount + 1}/3)`);
       
       setTimeout(() => {
-        console.log(`Retrying BanhMi model now (attempt ${retryCount + 1}/${maxRetries + 1})`);
+        console.log(`Retrying BanhMi model now (attempt ${retryCount + 1}/3)`);
         setModelError(false);
         setRetryCount(prev => prev + 1);
       }, delay);
     }
   }, [retryCount]);
   
-  // Reset error state when mount
+  // Reset error state when component mounts
   useEffect(() => {
     setModelError(false);
     setRetryCount(0);
   }, []);
   
-  // Model URL - use the specific Banh Mi model URL
-  const modelUrl = "https://storage.googleapis.com/kgbakerycakes/banhmi.glb";
+  // Use direct URL to the Banh Mi model with cache busting
+  const modelUrl = useMemo(() => {
+    const timestamp = Date.now();
+    return `https://storage.googleapis.com/kgbakerycakes/banhmi.glb?t=${timestamp}`;
+  }, []);
   
   // Memoize the Canvas component to prevent unnecessary re-renders
   return useMemo(() => (
@@ -434,76 +433,14 @@ function BanhMiModelSmall({ rotateRight }: { rotateRight: boolean }) {
       />
       
       <Suspense fallback={null}>
-        {!modelError ? (
-          <RotatingModel 
-            url={modelUrl} 
-            rotateRight={rotateRight} 
-            onLoadFailed={handleModelError} 
-          />
-        ) : (
-          <FallbackBanhMi rotateRight={rotateRight} />
-        )}
+        <RotatingModel 
+          url={modelUrl} 
+          rotateRight={rotateRight} 
+          onLoadFailed={handleModelError} 
+        />
       </Suspense>
     </Canvas>
   ), [rotateRight, modelError, handleModelError, modelUrl]);
-}
-
-// Fallback model for production where CORS prevents loading external models
-function FallbackBanhMi({ rotateRight }: { rotateRight: boolean }) {
-  // Keep all hook declarations consistently at the top
-  const meshRef = useRef<THREE.Mesh>(null);
-  
-  // Generate a random warm bread-like color - use useState for stable values
-  const [color] = useState(() => {
-    const hue = 30 + Math.random() * 20; // Range from orange-yellow to light brown
-    const saturation = 80 + Math.random() * 20; // High saturation
-    const lightness = 55 + Math.random() * 15; // Medium-high lightness
-    return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
-  });
-  
-  // Auto-rotation animation with specified direction
-  useFrame((state) => {
-    if (meshRef.current) {
-      // Rotate either clockwise or counter-clockwise based on the prop
-      meshRef.current.rotation.y += rotateRight ? 0.02 : -0.02;
-      
-      // Add a slight floating motion for visual interest
-      const time = state.clock.getElapsedTime();
-      meshRef.current.position.y = -0.2 + Math.sin(time * 0.8) * 0.05;
-    }
-  });
-  
-  // Create a banh mi-like shape using multiple geometries
-  return (
-    <group 
-      ref={meshRef as any}
-      position={[0, -0.2, 0]}
-      rotation={[0.1, 0, 0]}
-    >
-      {/* Bread loaf base */}
-      <mesh position={[0, 0, 0]} scale={[1.8, 0.6, 0.7]}>
-        <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial color={color} roughness={0.8} metalness={0.1} />
-      </mesh>
-      
-      {/* Rounded top of bread */}
-      <mesh position={[0, 0.3, 0]} scale={[1.7, 0.4, 0.65]}>
-        <sphereGeometry args={[0.5, 16, 16, 0, Math.PI * 2, 0, Math.PI * 0.5]} />
-        <meshStandardMaterial color={color} roughness={0.7} metalness={0.1} />
-      </mesh>
-      
-      {/* Add some colorful "filling" to make it look like a banh mi */}
-      <mesh position={[0, 0.05, -0.1]} rotation={[0.2, 0, 0]} scale={[1.6, 0.15, 0.4]}>
-        <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial color="#4CAF50" roughness={0.9} metalness={0.1} /> {/* Green for lettuce/cilantro */}
-      </mesh>
-      
-      <mesh position={[0, 0.2, -0.05]} rotation={[0.1, 0, 0]} scale={[1.5, 0.1, 0.3]}>
-        <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial color="#F44336" roughness={0.9} metalness={0.1} /> {/* Red for meat/pepper */}
-      </mesh>
-    </group>
-  );
 }
 
 // Separate component for the rotating model that uses the useFrame hook - No text
@@ -515,22 +452,18 @@ function RotatingModel({ url, rotateRight, onLoadFailed }: {
   // Start with all refs and state declarations to maintain consistent Hook order
   const meshRef = useRef<THREE.Mesh>(null);
   const [modelLoaded, setModelLoaded] = useState(false);
-  // Store color as state to ensure consistent renders
-  const [colorValue] = useState(() => {
-    // Generate a random warm color for each Banh Mi to make them look distinct
-    const hue = 20 + Math.random() * 30; 
-    const saturation = 80 + Math.random() * 20;
-    const lightness = 55 + Math.random() * 15;
-    return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
-  });
   
   // Set up error handling callback
   const handleError = useCallback((error: any) => {
     console.error("Failed to load model:", error);
+    console.error("Model URL:", url);
     onLoadFailed();
-  }, [onLoadFailed]);
+  }, [onLoadFailed, url]);
   
-  // Load the 3D model with error handling
+  // Use preload option to start loading before the component renders
+  useGLTF.preload(url);
+  
+  // Load the 3D model with better error handling
   let scene: THREE.Group | undefined;
   try {
     const result = useGLTF(url, undefined, undefined, (error) => {
@@ -553,7 +486,7 @@ function RotatingModel({ url, rotateRight, onLoadFailed }: {
       console.log("Model loaded successfully:", url);
       setModelLoaded(true);
     } else if (isMounted) {
-      console.error("Error loading model: scene is undefined");
+      console.error("Error loading model: scene is undefined for URL:", url);
       onLoadFailed();
     }
     
@@ -574,36 +507,14 @@ function RotatingModel({ url, rotateRight, onLoadFailed }: {
   
   // Create the model - ALWAYS call useMemo here to maintain hook order
   const model = useMemo(() => {
-    if (!scene || !modelLoaded) return null;
+    if (!scene || !modelLoaded) {
+      return null;
+    }
     
     const clonedScene = scene.clone();
     
-    // Apply random color tint to make each model look unique
-    clonedScene.traverse((child: THREE.Object3D) => {
-      if (child instanceof THREE.Mesh && child.material) {
-        if (Array.isArray(child.material)) {
-          child.material = child.material.map(mat => {
-            const newMat = mat.clone();
-            // Apply a subtle tint
-            if (newMat.color) {
-              const threeColor = new THREE.Color(colorValue);
-              newMat.color.lerp(threeColor, 0.3);
-            }
-            return newMat;
-          });
-        } else {
-          const newMat = child.material.clone();
-          if (newMat.color) {
-            const threeColor = new THREE.Color(colorValue);
-            newMat.color.lerp(threeColor, 0.3);
-          }
-          child.material = newMat;
-        }
-      }
-    });
-    
     return clonedScene;
-  }, [scene, colorValue, modelLoaded]);
+  }, [scene, modelLoaded]);
   
   // If no model is available yet, show nothing (loading state)
   if (!model) {
