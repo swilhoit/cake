@@ -3,8 +3,9 @@ import { useShopContext } from '../context/ShopContext';
 import Model3D from '../components/Model3D';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Environment, Html } from '@react-three/drei';
-import { Suspense, useState, useEffect } from 'react';
+import { Suspense, useState, useEffect, useRef } from 'react';
 import * as THREE from 'three';
+import { mainLoaderActive } from '../components/LoadingScreen';
 
 // Import mock products from HomePage to maintain consistency
 import { mockProducts } from './HomePage';
@@ -42,6 +43,22 @@ const getDeviceCapabilities = (): { isMobile: boolean, shouldUseImages: boolean,
   
   return { isMobile, shouldUseImages, dpr };
 };
+
+// Model loading fallback component
+function ModelLoadingFallback() {
+  // Don't show if the main loader is active
+  if (mainLoaderActive) return null;
+  
+  return (
+    <Html center>
+      <div className="flex items-center justify-center">
+        <div className="text-sm text-blue-500 bg-blue-50 px-3 py-2 rounded-full">
+          Loading cake model...
+        </div>
+      </div>
+    </Html>
+  );
+}
 
 function ProductCard({ product }: { product: any }) {
   const { addToCart } = useShopContext();
@@ -170,13 +187,7 @@ function ProductCard({ product }: { product: any }) {
             <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} intensity={1} castShadow={!isMobile} />
             
             <Suspense fallback={
-              <Html center>
-                <div className="flex items-center justify-center">
-                  <div className="text-sm text-blue-500 bg-blue-50 px-3 py-2 rounded-full">
-                    Loading cake model...
-                  </div>
-                </div>
-              </Html>
+              <ModelLoadingFallback />
             }>
               {!modelError ? (
                 <>

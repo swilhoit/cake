@@ -6,6 +6,7 @@ import { OrbitControls, Environment, Html, useGLTF } from '@react-three/drei';
 import Model3D from '../components/Model3D';
 import * as THREE from 'three';
 import React from 'react';
+import { mainLoaderActive } from '../components/LoadingScreen';
 
 // Mock product data for when Shopify products aren't available
 export const mockProducts = [
@@ -121,6 +122,22 @@ const getDeviceCapabilities = (): { isMobile: boolean, shouldUseImages: boolean,
   
   return { isMobile, shouldUseImages, dpr };
 };
+
+// Model loading fallback component
+function ModelLoadingFallback() {
+  // Don't show if the main loader is active
+  if (mainLoaderActive) return null;
+  
+  return (
+    <Html center>
+      <div className="flex items-center justify-center">
+        <div className="text-sm text-blue-500 px-3 py-2 rounded-full" style={{ background: 'transparent' }}>
+          Loading model...
+        </div>
+      </div>
+    </Html>
+  );
+}
 
 // Product card with 3D model
 function ProductCard({ product }: { product: any }) {
@@ -245,13 +262,7 @@ function ProductCard({ product }: { product: any }) {
           <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} intensity={1} castShadow />
           
           <Suspense fallback={
-            <Html center>
-              <div className="flex items-center justify-center">
-                <div className="text-sm text-blue-500 px-3 py-2 rounded-full" style={{ background: 'transparent' }}>
-                  Loading model...
-                </div>
-              </div>
-            </Html>
+            <ModelLoadingFallback />
           }>
             {!modelError ? (
               <>
