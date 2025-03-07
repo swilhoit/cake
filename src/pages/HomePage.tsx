@@ -285,10 +285,12 @@ function ProductCard({ product }: { product: any }) {
           gl={{ 
             antialias: true,
             alpha: true,
-            preserveDrawingBuffer: true,
+            preserveDrawingBuffer: false, // Disable unless needed for screenshots
             powerPreference: 'default',
-            depth: true
+            depth: true,
+            stencil: false // Disable stencil buffer to save memory
           }}
+          frameloop="demand" // Only render when needed
           className="touch-auto"
           style={{ 
             background: 'transparent',
@@ -298,46 +300,34 @@ function ProductCard({ product }: { product: any }) {
             transform: `scale(${containerScale})`
           }}
           onCreated={({ gl }) => {
-            // Set clear color with full transparency
-            gl.setClearColor(0x000000, 0);
+            // Enable memory optimizations - use proper THREE.js APIs
+            // Set sensible WebGL parameters
+            gl.setPixelRatio(window.devicePixelRatio || 1);
+            gl.setSize(gl.domElement.clientWidth, gl.domElement.clientHeight);
           }}
         >
+          {/* Simple lighting setup */}
           <ambientLight intensity={0.8} />
-          <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} intensity={1} castShadow />
+          <pointLight position={[10, 10, 10]} intensity={1.0} />
+          <spotLight position={[-10, 10, 10]} intensity={0.8} />
           
-          <Suspense fallback={
-            <ModelLoadingFallback />
-          }>
-            {!modelError ? (
-              <>
-                <Model3D 
-                  scale={scaleValue} 
-                  rotationSpeed={rotationSpeed} 
-                  productId={productId} 
-                />
-                {!isMobile && <Environment preset="city" />}
-              </>
-            ) : (
-              <Html center>
-                <div className="flex items-center justify-center">
-                  <div className="text-sm text-red-500 px-3 py-2 rounded-full" style={{ background: 'transparent' }}>
-                    Failed to load model
-                  </div>
-                </div>
-              </Html>
-            )}
+          <Suspense fallback={<ModelLoadingFallback />}>
+            <Model3D 
+              productId={productId} 
+              scale={scaleValue}
+              rotationSpeed={rotationSpeed}
+            />
           </Suspense>
-          
-          <OrbitControls
-            enableZoom={false}
-            maxPolarAngle={Math.PI / 2}
-            minPolarAngle={0}
-            rotateSpeed={0.5}
-            enableDamping={isMobile ? false : true}
-            dampingFactor={0.1}
-          />
         </Canvas>
       )}
+      
+      {/* Product info overlay */}
+      <div className="absolute bottom-0 left-0 w-full bg-white bg-opacity-80 p-2">
+        <h3 className="text-lg font-bold">{product.title}</h3>
+        <p className="text-sm text-gray-700">
+          ${parseFloat(product.variants[0].price).toFixed(2)}
+        </p>
+      </div>
     </div>
   );
 }
@@ -432,6 +422,19 @@ export default function HomePage() {
 function BanhMiModelSmall({ rotateRight }: { rotateRight: boolean }) {
   // Minimal state management
   const [modelError, setModelError] = useState(false);
+  const [canvasVisible, setCanvasVisible] = useState(false);
+  
+  // Load progressively to reduce WebGL context contention
+  useEffect(() => {
+    // Stagger the loading of WebGL canvases with randomized delays
+    // This helps prevent too many contexts from being created simultaneously
+    const delay = Math.random() * 1000; // 0-1000ms random delay
+    const timer = setTimeout(() => {
+      setCanvasVisible(true);
+    }, delay);
+    
+    return () => clearTimeout(timer);
+  }, []);
   
   // Simple error handler
   const handleModelError = () => {
@@ -442,22 +445,32 @@ function BanhMiModelSmall({ rotateRight }: { rotateRight: boolean }) {
   // Use the correct Banh Mi model URL
   const modelUrl = "https://storage.googleapis.com/kgbakerycakes/banhmi.glb";
   
+  // Return placeholder div if canvas not yet visible
+  if (!canvasVisible) {
+    return <div className="w-full h-full bg-yellow-300" />;
+  }
+  
   // Simple Canvas with minimal configuration
   return (
     <Canvas
       camera={{ position: [0, 0, 4.0], fov: 30 }}
       gl={{ 
         antialias: true,
-        alpha: true
+        alpha: true,
+        powerPreference: 'low-power', // Prefer battery life over performance
+        depth: false // Disable depth buffer when not needed
       }}
       style={{ 
         background: 'transparent',
         overflow: 'visible'
       }}
+      // Important performance optimizations
+      frameloop="demand" // Only render when needed
+      dpr={[1, 1.5]} // Lower resolution
     >
-      {/* Basic lighting */}
+      {/* Simplified lighting */}
       <ambientLight intensity={0.8} />
-      <spotLight position={[5, 10, 5]} intensity={1.5} />
+      <spotLight position={[5, 10, 5]} intensity={1.0} />
       
       <Suspense fallback={null}>
         <RotatingModel 
@@ -477,23 +490,82 @@ function RotatingModel({ url, rotateRight, onLoadFailed }: {
   onLoadFailed: () => void
 }) {
   const meshRef = useRef<THREE.Mesh>(null);
+  const [meshReady, setMeshReady] = useState(false);
+  const [modelLoaded, setModelLoaded] = useState(false);
   
-  // Load the model directly
-  let { scene } = useGLTF(url);
+  // Use loading state to avoid rendering issues during initial load
+  useEffect(() => {
+    // Use a flag to track if component is mounted
+    let isMounted = true;
+    
+    // Set a timeout to avoid multiple simultaneous WebGL operations
+    // This staggers the loading of multiple models
+    const loadTimer = setTimeout(() => {
+      if (isMounted) {
+        setMeshReady(true);
+      }
+    }, Math.random() * 200); // Random delay between 0-200ms
+
+    return () => {
+      isMounted = false;
+      clearTimeout(loadTimer);
+    };
+  }, []);
+
+  // Load model with error handling
+  const { scene } = useGLTF(meshReady ? url : '');
+
+  // Handle errors if no scene is loaded
+  useEffect(() => {
+    if (!scene && meshReady) {
+      console.error("Model error: No scene available");
+      onLoadFailed();
+    }
+  }, [scene, meshReady, onLoadFailed]);
+
+  // Mark when model is successfully loaded
+  useEffect(() => {
+    if (scene && !modelLoaded) {
+      setModelLoaded(true);
+    }
+  }, [scene, modelLoaded]);
+
+  // Clean up model resources on unmount
+  useEffect(() => {
+    return () => {
+      // Properly clean up WebGL resources
+      if (scene) {
+        scene.traverse((object) => {
+          if ((object as THREE.Mesh).isMesh) {
+            const mesh = object as THREE.Mesh;
+            if (mesh.geometry) {
+              mesh.geometry.dispose();
+            }
+            
+            if (mesh.material) {
+              if (Array.isArray(mesh.material)) {
+                mesh.material.forEach(material => material.dispose());
+              } else {
+                mesh.material.dispose();
+              }
+            }
+          }
+        });
+      }
+    };
+  }, [scene]);
   
-  // Handle errors
-  if (!scene) {
-    console.error("Failed to load model:", url);
-    onLoadFailed();
-    return null;
-  }
-  
-  // Simple rotation animation
+  // Simple rotation animation with controlled frame rate
   useFrame(() => {
-    if (meshRef.current) {
-      meshRef.current.rotation.y += rotateRight ? 0.02 : -0.02;
+    if (meshRef.current && scene && modelLoaded) {
+      meshRef.current.rotation.y += rotateRight ? 0.01 : -0.01;
     }
   });
+  
+  // Only render when model is ready
+  if (!scene || !meshReady) {
+    return null;
+  }
   
   // Render the model
   return (
