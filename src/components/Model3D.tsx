@@ -2,9 +2,13 @@ import React, { useRef, useState, useEffect, Suspense, useMemo, useCallback } fr
 import { useFrame } from '@react-three/fiber';
 import { useGLTF, Html } from '@react-three/drei';
 import * as THREE from 'three';
+import { mainLoaderActive } from './LoadingScreen';
 
 // Loading indicator component without text
 function ModelLoader() {
+  // Don't show if the main loader is active
+  if (mainLoaderActive) return null;
+  
   return (
     <Html center>
       <div className="flex flex-col items-center justify-center p-4 rounded-lg bg-white/70 backdrop-blur-sm shadow-lg">

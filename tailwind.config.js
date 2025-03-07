@@ -16,6 +16,7 @@ export default {
         'marquee-reverse': 'marquee-reverse 25s linear infinite',
         'marquee-fast': 'marquee 30s linear infinite',
         'marquee-reverse-fast': 'marquee-reverse 30s linear infinite',
+        'slide-up': 'slideUp 0.8s ease-out forwards',
       },
       keyframes: {
         gradient: {
@@ -30,6 +31,10 @@ export default {
         'marquee-reverse': {
           '0%': { transform: 'translateX(-100%)' },
           '100%': { transform: 'translateX(0%)' }
+        },
+        slideUp: {
+          '0%': { transform: 'translateY(100%)', opacity: '0.8' },
+          '100%': { transform: 'translateY(0)', opacity: '1' }
         },
       },
       colors: {

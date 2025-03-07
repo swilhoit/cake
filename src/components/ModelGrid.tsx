@@ -2,6 +2,7 @@ import { Suspense, useState, useEffect } from 'react';
 import Model3D from './Model3D';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Environment, Html } from '@react-three/drei';
+import { mainLoaderActive } from './LoadingScreen';
 
 // Product data (mock) - exactly 16 products for a 4x4 grid
 const products = [
@@ -25,6 +26,9 @@ const products = [
 
 // Loading component for Suspense fallback
 function ModelLoading() {
+  // Don't show if the main loader is active
+  if (mainLoaderActive) return null;
+  
   return (
     <Html center>
       <div className="flex flex-col items-center justify-center p-4 rounded-lg bg-white shadow-lg">

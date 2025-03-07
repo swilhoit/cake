@@ -1,9 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { usePreload } from '../context/PreloadContext';
 
+// Global variable to track if main loader is active
+export let mainLoaderActive = true;
+
 const LoadingScreen: React.FC = () => {
   const { isLoading, progress } = usePreload();
   const [currentTip, setCurrentTip] = useState(0);
+  const [showLoader, setShowLoader] = useState(true);
+  
+  // Update global variable when loading state changes
+  useEffect(() => {
+    mainLoaderActive = isLoading;
+    return () => {
+      mainLoaderActive = false;
+    };
+  }, [isLoading]);
   
   const loadingTips = [
     "Did you know? Our 3D cake models are rendered in real-time.",
@@ -27,17 +39,32 @@ const LoadingScreen: React.FC = () => {
     return () => clearInterval(interval);
   }, [isLoading, loadingTips.length]);
   
-  // Don't render anything if not loading
-  if (!isLoading) return null;
+  // Handle hiding the loader with animation
+  useEffect(() => {
+    if (!isLoading) {
+      // Set a timeout to allow the exit animation to complete
+      const timer = setTimeout(() => {
+        setShowLoader(false);
+      }, 800); // Match animation duration
+      return () => clearTimeout(timer);
+    } else {
+      setShowLoader(true);
+    }
+  }, [isLoading]);
+  
+  // Don't render anything if not showing
+  if (!showLoader) return null;
   
   return (
-    <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center" 
-         style={{ 
-           background: 'linear-gradient(-45deg, rgba(250, 220, 245, 1), rgba(220, 245, 250, 1), rgba(220, 250, 230, 1), rgba(245, 250, 220, 1))',
-           backgroundSize: '400% 400%',
-           animation: 'gradient 15s ease infinite',
-           backdropFilter: 'blur(5px)'
-         }}>
+    <div 
+      className={`fixed inset-0 z-[9999] flex flex-col items-center justify-center ${isLoading ? 'animate-slide-up' : 'transition-transform duration-800 transform translate-y-full'}`}
+      style={{ 
+        background: 'linear-gradient(-45deg, rgba(250, 220, 245, 1), rgba(220, 245, 250, 1), rgba(220, 250, 230, 1), rgba(245, 250, 220, 1))',
+        backgroundSize: '400% 400%',
+        animation: 'gradient 15s ease infinite, slideUp 0.8s ease-out forwards',
+        backdropFilter: 'blur(5px)'
+      }}
+    >
       <div className="container max-w-md mx-auto px-4 text-center">
         <div className="mb-8">
           {/* KG Bakery Logo */}

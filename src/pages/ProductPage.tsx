@@ -7,6 +7,7 @@ import { OrbitControls, Environment, Html } from '@react-three/drei';
 import Model3D from '../components/Model3D';
 import * as THREE from 'three';
 import { mockProducts } from '../pages/HomePage';
+import { mainLoaderActive } from '../components/LoadingScreen';
 
 // Mock gallery images for when the real product doesn't have images (using CDN images)
 const mockImages = [
@@ -70,6 +71,9 @@ const isShopifyConfigured = () => {
 
 // Loading component for Suspense fallback without text
 function ModelLoading() {
+  // Don't show if the main loader is active
+  if (mainLoaderActive) return null;
+  
   return (
     <Html center>
       <div className="flex flex-col items-center justify-center p-4 rounded-lg bg-white/70 backdrop-blur-sm shadow-lg">
