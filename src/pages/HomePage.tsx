@@ -195,6 +195,8 @@ function ProductCard({ product }: { product: any }) {
   // Extract product ID from the Shopify handle or use a default ID
   const productId = product.id ? parseInt(product.id.split('/').pop() || '1', 10) : 1;
 
+  console.log(`[HOME] ProductCard for ID ${productId}: isVisible=${isVisible}, useFallbackImage=${useFallbackImage}, inViewport=${inViewport}`);
+
   // Setup intersection observer to detect when card is in viewport
   useEffect(() => {
     if (!cardRef.current) return;
@@ -229,14 +231,14 @@ function ProductCard({ product }: { product: any }) {
 
   // Handle model loading complete
   const handleModelLoaded = useCallback(() => {
-    console.log(`Model loaded successfully for product ${productId}`);
+    console.log(`[HOME] Model loaded successfully for product ${productId}`);
     setModelReady(true);
     setModelError(false);
   }, [productId]);
 
   // Handle 3D model error with retry mechanism
-  const handleModelError = useCallback(() => {
-    console.log(`Model error for product ${productId}. Retrying...`);
+  const handleModelError = useCallback((error: string) => {
+    console.log(`[HOME] Model error for product ${productId}: ${error}`);
     setModelError(true);
     
     // Keep retrying without giving up
@@ -291,16 +293,8 @@ function ProductCard({ product }: { product: any }) {
           ref={canvasRef}
           camera={{ position: [0, 0, 4.0], fov: 30 }}
           dpr={dpr}
-          gl={{ 
-            antialias: true,
-            alpha: true,
-            preserveDrawingBuffer: false,
-            powerPreference: 'high-performance',
-            depth: true,
-            stencil: false
-          }}
-          frameloop="demand" 
-          className="touch-auto"
+          className="!touch-none" /* Fix for mobile touch handling */
+          frameloop={isMobile ? "demand" : "always"} // Only render on demand for mobile
           style={{ 
             background: 'transparent',
             touchAction: 'none',
@@ -311,7 +305,25 @@ function ProductCard({ product }: { product: any }) {
           onCreated={({ gl }) => {
             console.log(`Canvas created for product ${productId}`);
             WebGLContextManager.addContext();
-            gl.setPixelRatio(window.devicePixelRatio || 1);
+            
+            // Set clear color with transparency
+            gl.setClearColor(new THREE.Color('#f8f9fa'), 0);
+            
+            // Apply physical lights if available
+            if ('physicallyCorrectLights' in gl) {
+              (gl as any).physicallyCorrectLights = true;
+            }
+            
+            // Reduce quality for mobile
+            if (isMobile) {
+              gl.shadowMap.enabled = false;
+              if ('powerPreference' in gl) {
+                (gl as any).powerPreference = "low-power";
+              }
+            } else {
+              gl.setPixelRatio(window.devicePixelRatio || 1);
+            }
+            
             gl.setSize(gl.domElement.clientWidth, gl.domElement.clientHeight);
           }}
         >
@@ -350,6 +362,9 @@ function CanvasContent({
   onModelLoaded: () => void,
   onModelError: (error: string) => void
 }) {
+  // Get device capabilities for optimizations
+  const { isMobile } = getDeviceCapabilities();
+  
   // Clean up WebGL context on unmount
   useEffect(() => {
     return () => {
@@ -374,18 +389,30 @@ function CanvasContent({
     <>
       <ambientLight intensity={0.8} />
       <pointLight position={[10, 10, 10]} intensity={1.0} />
-      <spotLight position={[-10, 10, 10]} intensity={0.8} />
+      <spotLight position={[-10, 10, 10]} angle={0.15} penumbra={1} intensity={1} castShadow={!isMobile} />
       
       <Suspense fallback={<ModelLoadingFallback />}>
-        <Model3D 
-          productId={productId} 
-          scale={scaleValue}
-          rotationSpeed={rotationSpeed}
-          isDetailView={false}
-          onLoad={handleLoad}
-          onError={handleError}
-        />
+        <>
+          <Model3D 
+            productId={productId} 
+            scale={scaleValue}
+            rotationSpeed={rotationSpeed}
+            isDetailView={false}
+            onLoad={handleLoad}
+            onError={handleError}
+          />
+          {!isMobile && <Environment preset="city" />}
+        </>
       </Suspense>
+      
+      <OrbitControls
+        enableZoom={false}
+        maxPolarAngle={Math.PI / 2}
+        minPolarAngle={0}
+        rotateSpeed={0.5}
+        enableDamping={!isMobile}
+        dampingFactor={0.1}
+      />
     </>
   );
 }
