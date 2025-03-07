@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect, Suspense } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
+import { useFrame } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -164,39 +164,20 @@ export default function Model3D({
     setError(message);
   };
 
-  // Return the appropriate component based on loading/error state
+  // Return the 3D model content directly (no Canvas)
   return (
-    <Canvas
-      style={{ 
-        background: bgColor, 
-        width: '100%', 
-        height: '100%', 
-        borderRadius: isDetailView ? '12px' : '8px' 
-      }}
-      camera={{ position: [0, 0, 4], fov: 50 }}
-      shadows
-    >
-      <ambientLight intensity={0.7} />
-      <spotLight 
-        position={[10, 15, 10]} 
-        angle={0.3} 
-        penumbra={1} 
-        intensity={1} 
-        castShadow 
+    <Suspense fallback={<ModelLoader />}>
+      <Model 
+        scale={scale} 
+        rotationSpeed={rotationSpeed} 
+        productId={productId}
+        idNumber={idNumber}
+        bgColor={bgColor}
+        isDetailView={isDetailView}
+        onLoad={() => setIsLoading(false)} 
+        onError={handleModelError}
       />
-      <Suspense fallback={<ModelLoader />}>
-        <Model 
-          scale={scale} 
-          rotationSpeed={rotationSpeed} 
-          productId={productId}
-          idNumber={idNumber}
-          bgColor={bgColor}
-          isDetailView={isDetailView}
-          onLoad={() => setIsLoading(false)} 
-          onError={handleModelError}
-        />
-      </Suspense>
-    </Canvas>
+    </Suspense>
   );
 }
 
