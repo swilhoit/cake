@@ -19,6 +19,9 @@ export default {
         'slide-up': 'slideUp 0.8s ease-out forwards',
         'slide-down': 'slideDown 0.8s ease-in forwards',
         'flash-green': 'flashGreen 1s ease-out forwards',
+        'header-slide-down': 'headerSlideDown 1s ease-out forwards',
+        'model-scale-in': 'modelScaleIn 1.2s ease-out forwards',
+        'marquee-slide-in': 'marqueeSlideIn 1.5s ease-out forwards',
       },
       keyframes: {
         gradient: {
@@ -47,6 +50,19 @@ export default {
           '10%': { backgroundColor: '#22c55e' }, // green-500
           '25%': { backgroundColor: '#22c55e' }, // green-500
           '100%': { backgroundColor: '#22c55e' }, // green-500
+        },
+        headerSlideDown: {
+          '0%': { transform: 'translateY(-100%)', opacity: '0' },
+          '100%': { transform: 'translateY(0)', opacity: '1' }
+        },
+        modelScaleIn: {
+          '0%': { transform: 'scale(0)', opacity: '0' },
+          '70%': { transform: 'scale(1.05)', opacity: '0.9' },
+          '100%': { transform: 'scale(1)', opacity: '1' }
+        },
+        marqueeSlideIn: {
+          '0%': { transform: 'translateX(-100%)', opacity: '0' },
+          '100%': { transform: 'translateX(0)', opacity: '1' }
         },
       },
       colors: {

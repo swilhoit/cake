@@ -324,8 +324,17 @@ export default function HomePage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {displayedProducts.map((product: any) => (
-                <ProductCard key={product.id} product={product} />
+              {displayedProducts.map((product: any, index: number) => (
+                <div 
+                  key={product.id} 
+                  className="opacity-0" 
+                  style={{ 
+                    animation: `modelScaleIn 1.2s ease-out forwards`,
+                    animationDelay: `${0.1 + index * 0.15}s`
+                  }}
+                >
+                  <ProductCard product={product} />
+                </div>
               ))}
             </div>
           )}
@@ -348,7 +357,7 @@ export default function HomePage() {
       </section>
       
       {/* Banh Mi Marquee Section with yellow background - Simplified to 1 line */}
-      <section className="py-4 bg-yellow-300 my-8 overflow-visible">
+      <section className="py-4 bg-yellow-300 my-8 overflow-visible animate-marquee-slide-in">
         <h2 className="sr-only">Banh Mi Section</h2>
         
         {/* Marquee Container - Single line only */}
