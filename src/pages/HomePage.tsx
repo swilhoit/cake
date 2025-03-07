@@ -389,8 +389,8 @@ function BanhMiModelSmall({ rotateRight }: { rotateRight: boolean }) {
         console.error("Canvas error occurred");
         setUseFallback(true);
       }}
-      // Set low frameloop to reduce WebGL context overload - frameloop="demand" only renders when needed
-      frameloop="demand"
+      // Enable continuous rendering for rotation animation
+      frameloop="always"
     >
       {/* Improved lighting setup */}
       <ambientLight intensity={0.8} /> {/* Increased ambient light for better overall illumination */}
@@ -449,8 +449,7 @@ function FallbackBanhMi({ rotateRight }: { rotateRight: boolean }) {
   useFrame((state) => {
     if (meshRef.current) {
       // Rotate either clockwise or counter-clockwise based on the prop
-      // Reduced rotation speed for a more natural look
-      meshRef.current.rotation.y += rotateRight ? 0.01 : -0.01;
+      meshRef.current.rotation.y += rotateRight ? 0.02 : -0.02;
       
       // Add a slight floating motion for visual interest
       const time = state.clock.getElapsedTime();
@@ -528,8 +527,7 @@ function RotatingModel({ url, rotateRight, onLoadFailed }: {
   useFrame((state) => {
     if (meshRef.current) {
       // Rotate either clockwise or counter-clockwise based on the prop
-      // Reduced rotation speed for a more natural look
-      meshRef.current.rotation.y += rotateRight ? 0.01 : -0.01;
+      meshRef.current.rotation.y += rotateRight ? 0.02 : -0.02;
       
       // Add a slight floating motion for visual interest
       const time = state.clock.getElapsedTime();

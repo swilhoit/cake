@@ -363,7 +363,7 @@ export default function ProductPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
         {/* Product Image/3D Model */}
         <div>
-          <div className="rounded-lg overflow-hidden h-[500px] relative">
+          <div className="rounded-lg overflow-hidden h-[650px] relative">
             {useFallbackImage ? (
               <div className="bg-white rounded-lg shadow-lg overflow-hidden">
                 <img 
