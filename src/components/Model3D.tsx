@@ -3,6 +3,8 @@ import { useFrame } from '@react-three/fiber';
 import { useGLTF, Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { mainLoaderActive } from './LoadingScreen';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 // Loading indicator component without text
 function ModelLoader() {
@@ -46,66 +48,124 @@ function ModelError({ message }: { message: string }) {
 
 // Modify the modelPreloader function to handle preloading more reliably
 function modelPreloader() {
-  // Enable THREE cache mechanism
-  THREE.Cache.enabled = true;
-  
-  // Keep track of loaded models
   const loadedModels = new Map();
+  const loadingPromises = new Map();
   
+  // Handle CORS issues in development
+  const isDevelopment = window.location.hostname === 'localhost' || 
+                        window.location.hostname === '127.0.0.1';
+
   return {
-    preload: (url: string) => {
-      return new Promise((resolve, reject) => {
-        // Check if we've already loaded this model
-        if (loadedModels.has(url)) {
-          resolve(loadedModels.get(url));
-          return;
-        }
-        
-        // For Google Cloud Storage specifically
-        const textureLoader = new THREE.FileLoader();
-        textureLoader.setResponseType('arraybuffer'); // Important for binary files like GLB
-        textureLoader.setCrossOrigin('anonymous'); 
-        textureLoader.setWithCredentials(false); // Changed to false for Google Cloud Storage
-        textureLoader.setPath(''); // Make sure no path prefix is added
-        textureLoader.setRequestHeader({
-          'Access-Control-Allow-Origin': '*', // Request header for CORS
-          'Cache-Control': 'no-cache' // Prevent caching
-        });
-        
-        console.log(`Preloading model: ${url}`);
-        textureLoader.load(
-          url,
-          (blob) => {
-            console.log(`Successfully preloaded model: ${url}`);
-            loadedModels.set(url, blob); // Store for future use
-            resolve(blob);
-          },
-          (progress) => {
-            // Add progress tracking
-            if (progress.lengthComputable) {
-              const percentComplete = (progress.loaded / progress.total) * 100;
-              console.log(`Loading progress: ${Math.round(percentComplete)}%`);
-            }
-          },
-          (error) => {
-            console.error(`Failed to preload model: ${url}`, error);
-            reject(error);
+    preload: (url: string): Promise<any> => {
+      // If we already have a loading promise for this URL, return it
+      if (loadingPromises.has(url)) {
+        return loadingPromises.get(url);
+      }
+      
+      // If we already have loaded this model, return it immediately
+      if (loadedModels.has(url)) {
+        return Promise.resolve(loadedModels.get(url));
+      }
+
+      console.log(`Preloading model: ${url}`);
+      
+      const loader = new GLTFLoader();
+      
+      // Create a promise for this model load
+      const loadPromise = new Promise((resolve, reject) => {
+        const onProgress = (event: ProgressEvent) => {
+          if (event.lengthComputable) {
+            const percentComplete = (event.loaded / event.total) * 100;
+            console.log(`Model ${url} loading: ${Math.round(percentComplete)}%`);
           }
-        );
+        };
+
+        // For development, use a CORS proxy or switch to local assets
+        let modelUrl = url;
+        if (isDevelopment && url.includes('storage.googleapis.com')) {
+          // In development, switch to local assets if available
+          const fileName = url.split('/').pop();
+          if (fileName) {
+            modelUrl = `/models/${fileName}`;
+            console.log(`Development mode: Using local model path: ${modelUrl}`);
+          }
+        }
+
+        // Maximum retry count to prevent infinite retries
+        let retryCount = 0;
+        const maxRetries = 3;
+        const retryDelay = 1500; // 1.5 seconds between retries
+
+        const attemptLoad = () => {
+          loader.load(
+            modelUrl,
+            (gltf) => {
+              console.log(`Model loaded successfully: ${url}`);
+              
+              // Store the loaded model in our cache
+              loadedModels.set(url, gltf);
+              
+              // Remove the loading promise reference
+              loadingPromises.delete(url);
+              
+              resolve(gltf);
+            },
+            onProgress,
+            (error) => {
+              console.error(`Error loading model ${url}:`, error);
+              
+              if (retryCount < maxRetries) {
+                retryCount++;
+                console.log(`Retrying model load in ${retryDelay}ms (attempt ${retryCount}/${maxRetries})`);
+                setTimeout(attemptLoad, retryDelay);
+              } else {
+                // If we've exhausted retries, try a local fallback for development
+                if (isDevelopment && !modelUrl.startsWith('/models/')) {
+                  const fileName = url.split('/').pop();
+                  if (fileName) {
+                    const localUrl = `/models/${fileName}`;
+                    console.log(`Falling back to local model: ${localUrl}`);
+                    modelUrl = localUrl;
+                    retryCount = 0; // Reset retry count for the new URL
+                    setTimeout(attemptLoad, 0); // Immediately try the local URL
+                    return;
+                  }
+                }
+                
+                // All retries failed, reject the promise
+                loadingPromises.delete(url);
+                reject(new Error(`Failed to load model: ${url}`));
+              }
+            }
+          );
+        };
+
+        // Start loading
+        attemptLoad();
+      });
+
+      // Store the promise for this URL
+      loadingPromises.set(url, loadPromise);
+      
+      // Return the promise for this model load
+      return loadPromise.catch(error => {
+        console.error(`Failed to preload model: ${url}`, error);
+        loadingPromises.delete(url);
+        throw error;
       });
     },
-    // Add a method to fetch cached models
-    getPreloadedModel: (url: string) => {
-      return loadedModels.get(url);
-    },
-    // Add a method to check if a model is preloaded
-    isPreloaded: (url: string) => {
+    
+    isLoaded: (url: string): boolean => {
       return loadedModels.has(url);
+    },
+    
+    getLoadedModel: (url: string): any | null => {
+      return loadedModels.get(url) || null;
     }
   };
 }
 
-// Create a global preloader instance
+// Create a singleton instance of the model preloader
 const preloader = modelPreloader();
 
 // Main Model3D component - loads and displays 3D cake models
@@ -217,220 +277,85 @@ function Model({
   onLoad: () => void;
   onError: (message: string) => void;
 }) {
-  const meshRef = useRef<THREE.Mesh>(null);
-  const [modelLoaded, setModelLoaded] = useState(false);
-  const [isPreloaded, setIsPreloaded] = useState(false);
+  const [isPreloaded, setIsPreloaded] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
   
-  // Limit the model number to 1-8 (available models)
-  const idNum = parseInt(idNumber);
-  const modelNum = (!isNaN(idNum) && idNum > 0) ? ((idNum - 1) % 8) + 1 : 1;
+  // Get variant name based on the product ID
+  const variantName = productId ? getCakeVariantName(Number(productId)) : 'default';
   
-  // Set the model path - Always use Google Cloud Storage for consistent behavior
-  const modelPath = useMemo(() => {
-    // Map model number to specific character models in the optimized directory
-    const characterModels = [
-      'nemo.glb',         // ID 1 or ID % 5 = 1
-      'princess.glb',     // ID 2 or ID % 5 = 2
-      'spongebob1.glb',   // ID 3 or ID % 5 = 3
-      'strawberry.glb',   // ID 4 or ID % 5 = 4
-      'turkey.glb'        // ID 5 or ID % 5 = 0
-    ];
-
-    // Get model file based on product ID (modulo operator ensures we stay within bounds)
-    const modelIndex = (idNum - 1) % characterModels.length;
-    const modelFile = characterModels[modelIndex];
-    
-    // Explicit Google Cloud Storage URL
-    // Using static URLs without cache busters for better caching
-    const path = `https://storage.googleapis.com/kgbakerycakes/optimized/${modelFile}`;
-    
-    console.log(`Model path for product ${idNum}: ${path}`);
-    return path;
-  }, [idNum]);
+  // Construct the model URL based on the variant name
+  const modelUrl = `https://storage.googleapis.com/kgbakerycakes/optimized/${variantName}.glb`;
   
-  // Preload the model before using useGLTF
+  // Preload the model first before using it with useGLTF
   useEffect(() => {
     let isMounted = true;
     
-    // First check if the model is already preloaded
-    if (preloader.isPreloaded(modelPath)) {
-      console.log(`Model already preloaded: ${modelPath}`);
-      setIsPreloaded(true);
-      return;
-    }
+    console.log(`Starting preload for: ${modelUrl}`);
     
-    console.log(`Starting preload for: ${modelPath}`);
-    
-    // Attempt to preload the model file
-    preloader.preload(modelPath)
+    preloader.preload(modelUrl)
       .then(() => {
         if (isMounted) {
-          console.log(`Preload complete: ${modelPath}`);
+          console.log(`Model preloaded successfully: ${modelUrl}`);
           setIsPreloaded(true);
         }
       })
-      .catch(error => {
-        console.error(`Failed to preload model: ${modelPath}`, error);
+      .catch((preloadError) => {
         if (isMounted) {
-          onError(`Failed to preload model: ${error.message || 'Network error'}`);
+          console.error(`Model error: ${preloadError.message}`);
+          setError(`Failed to preload model: ${preloadError.message}`);
+          onError(`Failed to preload model: ${preloadError.message}`);
         }
       });
-      
+    
     return () => {
       isMounted = false;
     };
-  }, [modelPath, onError]);
+  }, [modelUrl, onError]);
   
-  // Calculate variant-specific transformations based on ID
-  const variantProps = useMemo(() => ({
-    // Base scale for this cake variant (multiplied by the prop scale)
-    baseScale: 0.9 + (idNum % 3) * 0.1,
-    
-    // Different rotation speeds and directions
-    rotationDirection: idNum % 2 === 0 ? 1 : -1,
-    rotationSpeedModifier: 0.8 + (idNum % 3) * 0.2,
-    
-    // Position offset to make them look different
-    positionY: (idNum % 3 - 1) * 0.2,
-    
-    // Some cakes can have a slight tilt
-    tiltX: (idNum % 4 - 2) * 0.1,
-    tiltZ: (idNum % 5 - 2) * 0.1,
-    
-    // For detail view, different position adjustment (moving up by adjusting Y position)
-    detailPositionY: -0.3 + (idNum % 3 - 1) * 0.2, // Moved the model up in the taller container
-    
-    // Custom variation title
-    variantName: getCakeVariantName(idNum)
-  }), [idNum]);
+  // Declare model loader to only use when preloaded
+  let gltf: GLTF | null = null;
   
-  // Configure GLTF loader options
-  const gltfOptions = {
-    draco: undefined,
-    meshoptDecoder: undefined,
-    crossOrigin: 'anonymous'
-  };
-  
-  // Wait for preload to complete before attempting to use useGLTF
-  // This is the key fix for the home page issue
-  const useModelLoader = isPreloaded;
-  
-  // Load model with enhanced error handling
-  // Use a try-catch block around useGLTF to handle exceptions
-  let scene: THREE.Group | undefined;
-  try {
-    // Only load the model if it's been preloaded first
-    const result = useModelLoader ? 
-      useGLTF(modelPath, gltfOptions.draco, gltfOptions.meshoptDecoder) : 
-      { scene: undefined };
-      
-    scene = result.scene;
-  } catch (error) {
-    console.error('Error in useGLTF hook:', error);
-    onError(`Exception in model loader: ${error}`);
+  // Only try to load the model with useGLTF when it's preloaded
+  if (isPreloaded) {
+    try {
+      gltf = useGLTF(modelUrl) as unknown as GLTF;
+    } catch (loadError) {
+      if (!error) {
+        console.error(`Error loading model with useGLTF: ${loadError}`);
+        setError(`Failed to load model: ${loadError}`);
+        onError(`Failed to load model: ${loadError}`);
+      }
+    }
   }
-  
-  // Monitor for successful model loading
+
+  // Notify the parent when the model is successfully loaded
   useEffect(() => {
-    if (scene) {
-      console.log(`Model loaded successfully: ${modelPath}`);
-      setModelLoaded(true);
+    if (gltf && isPreloaded && !error) {
       onLoad();
     }
-  }, [scene, modelPath, onLoad]);
-  
-  // Create a fallback model if the scene couldn't be loaded
-  useEffect(() => {
-    if (isPreloaded && !scene) {
-      // Keep trying - no fallback - log error only
-      console.error("Scene failed to load - continuing to retry");
-    }
-  }, [scene, isPreloaded]);
+  }, [gltf, isPreloaded, error, onLoad]);
 
-  // Clone the model when it loads successfully
-  const model = useMemo(() => {
-    try {
-      if (!scene) {
-        return new THREE.Group();
-      }
-      
-      // Clone the scene to avoid conflicts when instances are unmounted
-      const clonedScene = scene.clone();
-      
-      return clonedScene;
-    } catch (error) {
-      onError(`Error cloning scene: ${error}`);
-      return new THREE.Group();
-    }
-  }, [scene, onError]);
+  const groupRef = useRef<THREE.Group>(null);
   
-  // Apply color tint to the model based on productId
-  useEffect(() => {
-    if (!model || model.children.length === 0) return;
-    
-    try {
-      model.traverse((child: THREE.Object3D) => {
-        if (child instanceof THREE.Mesh && child.material) {
-          // Create a copy of the material to avoid affecting other instances
-          if (Array.isArray(child.material)) {
-            child.material = child.material.map(m => {
-              const newMat = m.clone();
-              // Apply a subtle tint to the material
-              if (newMat.color) {
-                const color = new THREE.Color(bgColor);
-                newMat.color.lerp(color, 0.15); // Very subtle tint
-              }
-              return newMat;
-            });
-          } else {
-            const newMat = child.material.clone();
-            if (newMat.color) {
-              const color = new THREE.Color(bgColor);
-              newMat.color.lerp(color, 0.15); // Very subtle tint
-            }
-            child.material = newMat;
-          }
-        }
-      });
-    } catch (error) {
-      console.warn("Error applying material tint:", error);
-    }
-  }, [model, bgColor]);
-
-  // Animation loop - rotate the mesh with custom rotation pattern
-  useFrame((state) => {
-    if (meshRef.current) {
-      // Base rotation with variant-specific direction and speed
-      meshRef.current.rotation.y += rotationSpeed * variantProps.rotationDirection * variantProps.rotationSpeedModifier;
-      
-      // Even-numbered cakes have a gentle floating motion (up and down)
-      if (idNum % 2 === 0) {
-        const time = state.clock.getElapsedTime();
-        meshRef.current.position.y = variantProps.positionY + Math.sin(time * 0.5) * 0.05;
-      } 
-      // Odd-numbered cakes have a slight wobble
-      else {
-        const time = state.clock.getElapsedTime();
-        meshRef.current.rotation.z = variantProps.tiltZ + Math.sin(time * 0.7) * 0.02;
-        meshRef.current.rotation.x = variantProps.tiltX + Math.sin(time * 0.4) * 0.02;
-      }
+  useFrame((state, delta) => {
+    if (groupRef.current && !error && gltf) {
+      groupRef.current.rotation.y += rotationSpeed;
     }
   });
 
-  // Always attempt to render the actual model
+  if (error) {
+    return null;
+  }
+  
+  if (!isPreloaded || !gltf) {
+    // Return an empty group while loading
+    return <group />;
+  }
+
   return (
-    <mesh 
-      ref={meshRef}
-      scale={[
-        scale * variantProps.baseScale,
-        scale * variantProps.baseScale,
-        scale * variantProps.baseScale
-      ]}
-      position={[0, isDetailView ? variantProps.detailPositionY : variantProps.positionY, 0]}
-      rotation={[variantProps.tiltX, 0, variantProps.tiltZ]}
-    >
-      <primitive object={model} />
-    </mesh>
+    <group ref={groupRef} scale={[scale, scale, scale]}>
+      <primitive object={gltf.scene} />
+    </group>
   );
 }
 
