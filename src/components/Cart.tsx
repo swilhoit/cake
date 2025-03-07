@@ -94,6 +94,22 @@ export default function Cart() {
                       {item.variant.title !== 'Default Title' ? item.variant.title : ''}
                     </p>
                     
+                    {/* Display custom attributes if they exist */}
+                    {item.customAttributes && (
+                      <div className="mt-2 text-xs">
+                        {item.customAttributes.customText && (
+                          <p className="text-gray-700">
+                            <span className="font-medium">Custom Text:</span> {item.customAttributes.customText}
+                          </p>
+                        )}
+                        {item.customAttributes.cakeAccessories && (
+                          <p className="text-gray-700">
+                            <span className="font-medium">Accessories:</span> {item.customAttributes.cakeAccessories}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    
                     <div className="flex items-center mt-2">
                       <button
                         onClick={() => updateCartItem(item.id, Math.max(1, item.quantity - 1))}

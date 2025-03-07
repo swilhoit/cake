@@ -21,6 +21,7 @@ class MockCart {
     };
     quantity: number;
     image?: any;
+    customAttributes?: any;
   }>;
   subtotalPrice: string;
   webUrl: string;
@@ -34,7 +35,7 @@ class MockCart {
     this.completedAt = null;
   }
 
-  addItem(variantId: string, quantity: number) {
+  addItem(variantId: string, quantity: number, customAttributes?: any) {
     // Find the product/variant in mock products
     let productTitle = 'Unknown Product';
     let variantTitle = 'Default';
@@ -60,6 +61,10 @@ class MockCart {
     if (existingItemIndex >= 0) {
       // If item exists, update quantity
       this.lineItems[existingItemIndex].quantity += quantity;
+      // Update custom attributes if provided
+      if (customAttributes) {
+        this.lineItems[existingItemIndex].customAttributes = customAttributes;
+      }
     } else {
       // If item doesn't exist, add it
       const newItem = {
@@ -71,7 +76,8 @@ class MockCart {
           price: price,
           image: image
         },
-        quantity: quantity
+        quantity: quantity,
+        customAttributes: customAttributes || {}
       };
       this.lineItems.push(newItem);
     }
@@ -139,7 +145,7 @@ interface ShopContextType {
   toggleCart: () => void;
   cart: any; // Shopify checkout object
   cartCount: number;
-  addToCart: (variantId: string, quantity: number) => Promise<void>;
+  addToCart: (variantId: string, quantity: number, customAttributes?: any) => Promise<void>;
   removeFromCart: (lineItemId: string) => Promise<void>;
   updateCartItem: (lineItemId: string, quantity: number) => Promise<void>;
   products: any[]; // Shopify products
@@ -239,19 +245,19 @@ export const ShopProvider = ({ children }: { children: ReactNode }) => {
   }, [mockCart]);
 
   // Add item to cart
-  const addToCart = async (variantId: string, quantity: number) => {
+  const addToCart = async (variantId: string, quantity: number, customAttributes?: any) => {
     if (!cart) return;
     
     if (usingMockCart) {
       console.log("Adding to mock cart:", variantId, quantity);
-      const updatedCart = mockCart.addItem(variantId, quantity);
+      const updatedCart = mockCart.addItem(variantId, quantity, customAttributes);
       setCart(updatedCart);
       setCartCount(updatedCart.lineItems.length);
       setIsCartOpen(true); // Open the cart when adding an item
       return;
     }
     
-    const lineItemsToAdd = [{ variantId, quantity }];
+    const lineItemsToAdd = [{ variantId, quantity, customAttributes }];
     
     const updatedCheckout = await addItemToCheckout(cart.id, lineItemsToAdd);
     

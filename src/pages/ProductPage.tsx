@@ -116,6 +116,8 @@ export default function ProductPage() {
   const [useFallbackImage, setUseFallbackImage] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [showImageModal, setShowImageModal] = useState(false);
+  const [customText, setCustomText] = useState('');
+  const [cakeAccessories, setCakeAccessories] = useState('');
   const { addToCart } = useShopContext();
   const { isMobile, shouldUseImages, dpr } = getDeviceCapabilities();
   const [retryCount, setRetryCount] = useState(0);
@@ -253,9 +255,21 @@ export default function ProductPage() {
   const handleAddToCart = () => {
     if (!selectedVariant) return;
     
+    // Create customization object if either field has content
+    const hasCustomizations = customText.trim() !== '' || cakeAccessories.trim() !== '';
+    const customizations = hasCustomizations ? {
+      customText: customText.trim(),
+      cakeAccessories: cakeAccessories.trim()
+    } : undefined;
+    
     // Create a flashy notification 
     console.log(`Adding to cart: ${product.title}, variant: ${selectedVariant.title}, quantity: ${quantity}`);
-    addToCart(selectedVariant.id, quantity);
+    if (hasCustomizations) {
+      console.log('With customizations:', customizations);
+    }
+    
+    // Add to cart with customizations if they exist
+    addToCart(selectedVariant.id, quantity, customizations);
     
     // Show a confirmation message
     const confirmElement = document.getElementById('add-confirmation');
@@ -488,6 +502,40 @@ export default function ProductPage() {
                   );
                 })}
               </select>
+            </div>
+            
+            {/* Custom Cake Text */}
+            <div>
+              <label htmlFor="customText" className="block text-sm font-medium text-gray-700">
+                Custom Cake Text
+              </label>
+              <textarea
+                id="customText"
+                name="customText"
+                className="mt-1 block w-full pl-3 pr-3 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+                placeholder="Enter text to be written on the cake (e.g., 'Happy Birthday John!')"
+                value={customText}
+                onChange={(e) => setCustomText(e.target.value)}
+                rows={2}
+              />
+              <p className="mt-1 text-xs text-gray-500">Let us know what you'd like written on your cake</p>
+            </div>
+            
+            {/* Cake Accessories */}
+            <div>
+              <label htmlFor="cakeAccessories" className="block text-sm font-medium text-gray-700">
+                Cake Accessories
+              </label>
+              <input
+                type="text"
+                id="cakeAccessories"
+                name="cakeAccessories"
+                className="mt-1 block w-full pl-3 pr-3 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+                placeholder="Candles, toppers, etc."
+                value={cakeAccessories}
+                onChange={(e) => setCakeAccessories(e.target.value)}
+              />
+              <p className="mt-1 text-xs text-gray-500">Specify any accessories you would like with your cake</p>
             </div>
             
             {/* Add to Cart Button */}
