@@ -31,6 +31,14 @@
   }
 }
 
+@layer components {
+  /* Marquee styles */
+  .marquee-content {
+    white-space: nowrap;
+    min-width: 200%;
+  }
+}
+
 @layer utilities {
   .line-clamp-2 {
     display: -webkit-box;

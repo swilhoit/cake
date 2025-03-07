@@ -324,122 +324,70 @@ export default function HomePage() {
         </div>
       </section>
       
-      {/* Banh Mi Section */}
-      <section className="py-24 bg-yellow-400 mx-8 my-12 rounded-3xl">
-        <div className="container mx-auto px-8">
-          <div className="flex flex-col md:flex-row items-center justify-between">
-            <div className="md:w-1/2 mb-12 md:mb-0 text-center md:text-left">
-              <h2 className="text-6xl font-black text-black mb-8 font-playfair">We have Banh Mis!</h2>
-              <p className="text-2xl font-bold text-black mb-10 font-rubik">
-                Try our delicious, freshly made Vietnamese sandwiches with a variety of fillings.
-              </p>
-              <Link 
-                to="/shop" 
-                className="inline-block bg-black hover:bg-gray-800 text-yellow-400 font-bold px-10 py-5 rounded-xl transition shadow-lg text-xl font-rubik"
-              >
-                Order Now
-              </Link>
-            </div>
-            
-            <div className="md:w-1/2 h-96">
-              <BanhMiModel />
-            </div>
+      {/* Banh Mi Marquee Section */}
+      <section className="py-8 bg-yellow-400 my-12 overflow-hidden">
+        <h2 className="sr-only">Banh Mi Section</h2>
+        
+        {/* Marquee Container */}
+        <div className="marquee-container relative w-full">
+          {/* First Marquee - Left to Right */}
+          <div className="marquee-content flex animate-marquee">
+            {/* Repeat the content multiple times to ensure continuous scrolling */}
+            {[1, 2, 3, 4, 5].map((item) => (
+              <div key={`banh-left-${item}`} className="flex items-center mx-12">
+                <div className="h-40 w-40 mr-6">
+                  <BanhMiModelSmall rotateRight={true} />
+                </div>
+                <h3 className="text-5xl font-black text-black whitespace-nowrap font-playfair">
+                  We have Banh Mis!
+                </h3>
+              </div>
+            ))}
           </div>
+          
+          {/* Second Marquee - Right to Left (reversed) */}
+          <div className="marquee-content flex animate-marquee-reverse mt-4">
+            {/* Repeat the content multiple times in reverse */}
+            {[1, 2, 3, 4, 5].map((item) => (
+              <div key={`banh-right-${item}`} className="flex items-center mx-12">
+                <h3 className="text-5xl font-black text-black whitespace-nowrap font-playfair mr-6">
+                  Freshly Made Daily!
+                </h3>
+                <div className="h-40 w-40">
+                  <BanhMiModelSmall rotateRight={false} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        
+        {/* Call to action button centered below the marquee */}
+        <div className="text-center mt-8 mb-4">
+          <Link 
+            to="/shop" 
+            className="inline-block bg-black hover:bg-gray-800 text-yellow-400 font-bold px-10 py-5 rounded-xl transition shadow-lg text-xl font-rubik"
+          >
+            Order Now
+          </Link>
         </div>
       </section>
     </div>
   );
 }
 
-// BanhMi Model component with rotating 3D model
-function BanhMiModel() {
-  const [isVisible, setIsVisible] = useState(false);
-  const [modelError, setModelError] = useState(false);
-  const { isMobile, dpr } = getDeviceCapabilities();
-  
-  // Only show the model after a delay to ensure initial mount is complete
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsVisible(true);
-    }, 100);
-    
-    return () => clearTimeout(timer);
-  }, []);
-  
-  return (
-    <div className="relative h-full w-full">
-      {isVisible && (
-        <Canvas
-          camera={{ position: [0, 0, 4.0], fov: 30 }}
-          dpr={dpr}
-          gl={{ 
-            antialias: true,
-            alpha: true,
-            preserveDrawingBuffer: true,
-            powerPreference: 'default',
-            depth: true
-          }}
-          className="!touch-none"
-          style={{ background: 'transparent' }}
-          onCreated={({ gl }) => {
-            // Set clear color with full transparency
-            gl.setClearColor(0x000000, 0);
-          }}
-        >
-          <ambientLight intensity={0.8} />
-          <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} intensity={1} castShadow />
-          
-          <Suspense fallback={
-            <Html center>
-              <div className="flex items-center justify-center">
-                <div className="text-sm text-yellow-800 px-3 py-2 rounded-full" style={{ background: 'transparent' }}>
-                  Loading Banh Mi model...
-                </div>
-              </div>
-            </Html>
-          }>
-            {!modelError ? (
-              <>
-                <RotatingBanhMi />
-                {!isMobile && <Environment preset="city" />}
-              </>
-            ) : (
-              <Html center>
-                <div className="flex items-center justify-center">
-                  <div className="text-sm text-red-500 px-3 py-2 rounded-full" style={{ background: 'transparent' }}>
-                    Failed to load model
-                  </div>
-                </div>
-              </Html>
-            )}
-          </Suspense>
-          
-          <OrbitControls
-            enableZoom={false}
-            maxPolarAngle={Math.PI / 2}
-            minPolarAngle={0}
-            rotateSpeed={0.5}
-            enableDamping={isMobile ? false : true}
-            dampingFactor={0.1}
-          />
-        </Canvas>
-      )}
-    </div>
-  );
-}
-
-// Rotating Banh Mi model
-function RotatingBanhMi() {
+// Smaller Banh Mi model optimized for the marquee
+function BanhMiModelSmall({ rotateRight }: { rotateRight: boolean }) {
   const meshRef = useRef<THREE.Mesh>(null);
   const modelUrl = "https://storage.googleapis.com/kgbakerycakes/banhmi.glb";
   
   // Load the Banh Mi 3D model
   const { scene } = useGLTF(modelUrl);
   
-  // Auto-rotation animation with even faster speed
+  // Auto-rotation animation with specified direction
   useFrame(() => {
     if (meshRef.current) {
-      meshRef.current.rotation.y += 0.025; // Even faster rotation (5x original speed)
+      // Rotate either clockwise or counter-clockwise based on the prop
+      meshRef.current.rotation.y += rotateRight ? 0.03 : -0.03;
     }
   });
   
@@ -450,13 +398,29 @@ function RotatingBanhMi() {
   }, [scene]);
   
   return (
-    <mesh 
-      ref={meshRef}
-      scale={[2.2, 2.2, 2.2]}
-      position={[0, -0.3, 0]}
-      rotation={[0.1, 0, 0]}
+    <Canvas
+      camera={{ position: [0, 0, 4.0], fov: 30 }}
+      gl={{ 
+        antialias: true,
+        alpha: true,
+        preserveDrawingBuffer: true,
+        powerPreference: 'default',
+        depth: true
+      }}
+      className="!touch-none"
+      style={{ background: 'transparent' }}
     >
-      <primitive object={model} />
-    </mesh>
+      <ambientLight intensity={0.8} />
+      <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} intensity={1} castShadow />
+      
+      <mesh 
+        ref={meshRef}
+        scale={[2.0, 2.0, 2.0]}
+        position={[0, 0, 0]}
+        rotation={[0.1, 0, 0]}
+      >
+        <primitive object={model} />
+      </mesh>
+    </Canvas>
   );
 } 
