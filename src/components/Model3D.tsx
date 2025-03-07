@@ -44,6 +44,32 @@ function ModelError({ message }: { message: string }) {
   );
 }
 
+// Add this helper function after the imports
+function modelPreloader() {
+  // Enable THREE cache mechanism
+  THREE.Cache.enabled = true;
+  
+  return {
+    preload: (url: string) => {
+      return new Promise((resolve, reject) => {
+        const textureLoader = new THREE.FileLoader();
+        textureLoader.setResponseType('blob');
+        textureLoader.setCrossOrigin('anonymous'); // Changed to anonymous which generally works better
+        textureLoader.setWithCredentials(true);
+        textureLoader.load(
+          url,
+          (blob) => resolve(blob),
+          () => {}, // Progress not needed
+          (error) => reject(error)
+        );
+      });
+    }
+  };
+}
+
+// Create a global preloader instance
+const preloader = modelPreloader();
+
 // Main Model3D component - loads and displays 3D cake models
 export default function Model3D({ 
   scale = 1, 
@@ -179,6 +205,27 @@ function Model({
     return path;
   }, [idNum]);
   
+  // Preload the model before using useGLTF
+  useEffect(() => {
+    let isMounted = true;
+    
+    // Attempt to preload the model file
+    preloader.preload(modelPath)
+      .then(() => {
+        console.log(`Successfully preloaded: ${modelPath}`);
+      })
+      .catch(error => {
+        console.error(`Failed to preload model: ${modelPath}`, error);
+        if (isMounted) {
+          onError(`Failed to preload model: ${error.message || 'Network error'}`);
+        }
+      });
+      
+    return () => {
+      isMounted = false;
+    };
+  }, [modelPath, onError]);
+  
   // Calculate variant-specific transformations based on ID
   const variantProps = useMemo(() => ({
     // Base scale for this cake variant (multiplied by the prop scale)
@@ -202,11 +249,21 @@ function Model({
     variantName: getCakeVariantName(idNum)
   }), [idNum]);
   
-  // Load model with error handling
+  // Configure GLTF loader options
+  const gltfOptions = {
+    draco: undefined,
+    meshoptDecoder: undefined,
+    useDraco: false,
+    useFloatVertexType: true,
+    crossOrigin: 'anonymous'
+  };
+  
+  // Load model with enhanced error handling
   // Use a try-catch block around useGLTF to handle exceptions
   let scene: THREE.Group | undefined;
   try {
-    const result = useGLTF(modelPath, undefined, undefined, (error) => {
+    // Use correct loader options
+    const result = useGLTF(modelPath, gltfOptions.draco, gltfOptions.meshoptDecoder, (error) => {
       console.error('GLTF loader error:', error);
       onError(`Failed to load model: ${error}`);
     });
@@ -216,18 +273,35 @@ function Model({
     onError(`Exception in model loader: ${error}`);
   }
   
-  // Update error handler to watch for changes to scene
+  // Create a fallback model if the scene couldn't be loaded
   useEffect(() => {
     if (!scene) {
-      onError("Scene failed to load");
+      // Create a fallback geometric shape instead of showing an error
+      const geometry = new THREE.BoxGeometry(1, 1, 1);
+      const material = new THREE.MeshStandardMaterial({ color: bgColor });
+      const fallbackMesh = new THREE.Mesh(geometry, material);
+      
+      const group = new THREE.Group();
+      group.add(fallbackMesh);
+      
+      // Set the scene to this fallback
+      scene = group;
+      
+      // Notify that we're using a fallback
+      console.log("Using fallback geometry instead of model");
+      
+      // Mark as loaded since we have a viable fallback
+      setTimeout(() => {
+        setModelLoaded(true);
+        onLoad();
+      }, 100);
     }
-  }, [scene, onError]);
+  }, [scene, bgColor, onLoad]);
   
   // Clone the model when it loads successfully
   const model = useMemo(() => {
     try {
       if (!scene) {
-        onError("No scene available");
         return new THREE.Group();
       }
       

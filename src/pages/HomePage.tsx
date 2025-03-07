@@ -8,22 +8,38 @@ import * as THREE from 'three';
 import React from 'react';
 import { mainLoaderActive } from '../components/LoadingScreen';
 
-// Global WebGL context manager to prevent exceeding browser limits
-const WebGLContextManager = {
-  maxContexts: 8, // Most browsers limit to around 8-16 contexts
+// WebGL Context Manager to limit context creation
+type WebGLContextManagerType = {
+  maxContexts: number;
+  activeContexts: number;
+  canCreateContext: () => boolean;
+  addContext: () => number;
+  removeContext: () => number;
+};
+
+// Create a global WebGL context manager
+const WebGLContextManager: WebGLContextManagerType = {
+  maxContexts: 4, // Reduce from 8 to 4 for more safety
   activeContexts: 0,
-  canCreateContext: function() {
+  
+  canCreateContext() {
     return this.activeContexts < this.maxContexts;
   },
-  addContext: function() {
-    this.activeContexts += 1;
-    console.log(`WebGL Context Added: ${this.activeContexts}/${this.maxContexts}`);
+  
+  addContext() {
+    if (this.activeContexts < this.maxContexts) {
+      this.activeContexts += 1;
+      console.log(`WebGL context added. Active contexts: ${this.activeContexts}/${this.maxContexts}`);
+    } else {
+      console.warn(`Cannot create WebGL context. Already at max (${this.maxContexts})`);
+    }
     return this.activeContexts;
   },
-  removeContext: function() {
+  
+  removeContext() {
     if (this.activeContexts > 0) {
       this.activeContexts -= 1;
-      console.log(`WebGL Context Removed: ${this.activeContexts}/${this.maxContexts}`);
+      console.log(`WebGL context removed. Active contexts: ${this.activeContexts}/${this.maxContexts}`);
     }
     return this.activeContexts;
   }
@@ -165,7 +181,7 @@ function ProductCard({ product }: { product: any }) {
   const { addToCart } = useShopContext();
   const [isVisible, setIsVisible] = useState(false);
   const [modelError, setModelError] = useState(false);
-  const [useFallbackImage, setUseFallbackImage] = useState(false);
+  const [useFallbackImage, setUseFallbackImage] = useState(true); // Always use fallback for now
   const { isMobile, shouldUseImages, dpr } = getDeviceCapabilities();
   const [retryCount, setRetryCount] = useState(0);
   const navigate = useNavigate();
@@ -203,37 +219,6 @@ function ProductCard({ product }: { product: any }) {
       }
     };
   }, []);
-
-  // For performance on mobile, we might want to use images instead of 3D models
-  useEffect(() => {
-    // If we should use images based on device capability, set fallback image
-    if (shouldUseImages || !WebGLContextManager.canCreateContext()) {
-      setUseFallbackImage(true);
-      return;
-    }
-    
-    // Only show the model if in viewport and after a delay
-    if (inViewport) {
-      const delay = isMobile ? 200 : 50;
-      
-      const timer = setTimeout(() => {
-        setIsVisible(true);
-      }, delay);
-      
-      return () => clearTimeout(timer);
-    } else {
-      setIsVisible(false);
-    }
-  }, [isMobile, shouldUseImages, inViewport]);
-
-  // Clean up when component unmounts or is not in viewport
-  useEffect(() => {
-    return () => {
-      if (!inViewport && isVisible) {
-        setIsVisible(false);
-      }
-    };
-  }, [inViewport, isVisible]);
 
   // Smooth transition for scale and rotation values using useSpring-like approach
   useEffect(() => {
@@ -278,53 +263,45 @@ function ProductCard({ product }: { product: any }) {
 
   // Handle 3D model error with retry mechanism
   const handleModelError = () => {
-    console.log(`Model error for product ${productId}, retry: ${retryCount}`);
+    console.log(`Model error for product ${productId}. Falling back to image.`);
     setModelError(true);
     
-    // In production with CORS errors, try a couple of times then fallback
-    const maxRetries = 3;
-    
-    // Try several times to load the model with increasing delays
-    if (retryCount < maxRetries) {
-      const retryDelay = (retryCount + 1) * 500; // 500ms, 1000ms, 1500ms
-      
+    if (retryCount < 3) {
       setTimeout(() => {
-        console.log(`Retrying model load for product ${productId}, attempt ${retryCount + 1}/${maxRetries}`);
         setModelError(false);
         setRetryCount(prev => prev + 1);
-      }, retryDelay);
+      }, 500 * (retryCount + 1));
     } else {
-      // After retries, fall back to image
-      console.log(`Falling back to image for product ${productId} after ${maxRetries} failed attempts`);
       setUseFallbackImage(true);
     }
   };
 
+  // Handle adding to cart
   const handleAddToCart = () => {
-    console.log("Adding to cart:", product.title, "variant:", product.variants[0].id);
-    addToCart(product.variants[0].id, 1);
+    if (product) {
+      addToCart(product.variants[0], 1);
+    }
   };
 
-  // Get fallback image URL with better error handling
+  // Get appropriate fallback image URL
   const getFallbackImageUrl = () => {
-    if (product.images && product.images.length > 0) {
+    if (product.featuredImage?.url) {
+      return product.featuredImage.url;
+    }
+    // For mock products
+    if (product.images?.[0]?.src) {
       return product.images[0].src;
     }
-    
-    // Use CDN images instead of local placeholders since local files are empty
-    const placeholders = [
-      "https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=500&auto=format", // Chocolate cake
-      "https://images.unsplash.com/photo-1621303837174-89787a7d4729?w=500&auto=format", // Birthday cake
-      "https://images.unsplash.com/photo-1562777717-dc6984f65a63?w=500&auto=format", // Strawberry cake
-      "https://images.unsplash.com/photo-1586985289688-ca3cf47d3e6e?w=500&auto=format"  // Fancy cake
-    ];
-    
-    return placeholders[productId % placeholders.length];
+    // Default/placeholder image
+    return 'https://storage.googleapis.com/kgbakerycakes/placeholder-cake.jpg';
   };
 
-  // Navigate to the product page
+  // Navigate to product page when card is clicked
   const goToProductPage = () => {
-    navigate(`/product/${product.id.split('/').pop()}`);
+    if (product) {
+      const handle = product.handle || `product-${productId}`;
+      navigate(`/product/${handle}`);
+    }
   };
 
   return (
@@ -335,55 +312,13 @@ function ProductCard({ product }: { product: any }) {
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {(useFallbackImage || !inViewport) ? (
-        <img 
-          src={getFallbackImageUrl()} 
-          alt={product.title} 
-          className="w-full h-full object-contain transition-transform duration-500 ease-out"
-          style={{ transform: `scale(${isHovered ? 1.5 : 1})` }}
-        />
-      ) : isVisible && (
-        <Canvas
-          camera={{ position: [0, 0, 4.0], fov: 30 }}
-          dpr={dpr}
-          gl={{ 
-            antialias: true,
-            alpha: true,
-            preserveDrawingBuffer: false, // Disable unless needed for screenshots
-            powerPreference: 'default',
-            depth: true,
-            stencil: false // Disable stencil buffer to save memory
-          }}
-          frameloop="demand" // Only render when needed
-          className="touch-auto"
-          style={{ 
-            background: 'transparent',
-            touchAction: 'none',
-            overflow: 'visible',
-            transition: 'transform 0.3s ease-out',
-            transform: `scale(${containerScale})`
-          }}
-          onCreated={({ gl }) => {
-            // Enable memory optimizations - use proper THREE.js APIs
-            // Set sensible WebGL parameters
-            gl.setPixelRatio(window.devicePixelRatio || 1);
-            gl.setSize(gl.domElement.clientWidth, gl.domElement.clientHeight);
-          }}
-        >
-          {/* Simple lighting setup */}
-          <ambientLight intensity={0.8} />
-          <pointLight position={[10, 10, 10]} intensity={1.0} />
-          <spotLight position={[-10, 10, 10]} intensity={0.8} />
-          
-          <Suspense fallback={<ModelLoadingFallback />}>
-            <Model3D 
-              productId={productId} 
-              scale={scaleValue}
-              rotationSpeed={rotationSpeed}
-            />
-          </Suspense>
-        </Canvas>
-      )}
+      {/* Always use image for now until we can fix model loading */}
+      <img 
+        src={getFallbackImageUrl()} 
+        alt={product.title} 
+        className="w-full h-full object-contain transition-transform duration-500 ease-out"
+        style={{ transform: `scale(${isHovered ? 1.5 : 1})` }}
+      />
       
       {/* Product info overlay */}
       <div className="absolute bottom-0 left-0 w-full bg-white bg-opacity-80 p-2">
@@ -486,158 +421,6 @@ export default function HomePage() {
           </div>
         </div>
       </section>
-      
-      {/* Banh Mi Marquee Section with yellow background - Simplified to 1 line */}
-      <section className="py-4 bg-yellow-300 my-8 overflow-visible animate-marquee-slide-in">
-        <h2 className="sr-only">Banh Mi Section</h2>
-        
-        {/* Marquee Container - Single line only - REDUCED NUMBER OF ITEMS */}
-        <div className="marquee-container relative w-full overflow-visible">
-          {/* Single Marquee - Left to Right - FASTER speed - REDUCED repetitions */}
-          <div className="marquee-content flex animate-marquee-fast overflow-visible" style={{ paddingLeft: '100%' }}>
-            {/* Reduced to just 5 repetitions to avoid too many elements */}
-            {Array.from({ length: 5 }).map((_, index) => (
-              <React.Fragment key={`banh-left-${index}`}>
-                <div className="h-32 w-32 mx-2 overflow-visible">
-                  <BanhMiModelSmall rotateRight={index % 2 === 0} />
-                </div>
-                <div className="flex items-center mx-2">
-                  <h3 className="text-4xl font-black text-black whitespace-nowrap font-rubik">
-                    WE HAVE BANH MIS!
-                  </h3>
-                </div>
-              </React.Fragment>
-            ))}
-          </div>
-        </div>
-      </section>
     </div>
-  );
-}
-
-// Modify the BanhMiModelSmall component to use much simpler image fallback
-function BanhMiModelSmall({ rotateRight }: { rotateRight: boolean }) {
-  // Disable 3D models in the marquee completely - using images is much more reliable
-  // for this high-volume element that doesn't need interaction
-  return (
-    <div className="w-full h-full flex items-center justify-center">
-      <img 
-        src="https://storage.googleapis.com/kgbakerycakes/banh-mi-2d.png" 
-        alt="Banh Mi" 
-        className="w-5/6 h-5/6 object-contain" 
-        style={{ 
-          transform: `rotate(${rotateRight ? 10 : -10}deg)`,
-          animation: `${rotateRight ? 'spin-right' : 'spin-left'} 10s infinite linear`
-        }}
-      />
-    </div>
-  );
-}
-
-// Modify the RotatingModel component to use the WebGL context manager
-function RotatingModel({ url, rotateRight, onLoadFailed }: { 
-  url: string, 
-  rotateRight: boolean,
-  onLoadFailed: () => void
-}) {
-  const meshRef = useRef<THREE.Mesh>(null);
-  const [meshReady, setMeshReady] = useState(false);
-  const [modelLoaded, setModelLoaded] = useState(false);
-  const contextIdRef = useRef<number | null>(null);
-  
-  // Register this component with the WebGL context manager
-  useEffect(() => {
-    if (!WebGLContextManager.canCreateContext()) {
-      console.log("Maximum WebGL contexts reached, cannot create a new context");
-      onLoadFailed();
-      return;
-    }
-    
-    contextIdRef.current = WebGLContextManager.addContext();
-    
-    return () => {
-      if (contextIdRef.current !== null) {
-        WebGLContextManager.removeContext();
-        contextIdRef.current = null;
-      }
-    };
-  }, [onLoadFailed]);
-  
-  // Only start loading if we got a valid context
-  useEffect(() => {
-    if (contextIdRef.current !== null) {
-      // Stagger the loading with a short delay
-      const timer = setTimeout(() => {
-        setMeshReady(true);
-      }, Math.random() * 200);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [contextIdRef.current]);
-
-  // Load model with error handling
-  const { scene } = useGLTF(meshReady ? url : '');
-
-  // Handle errors if no scene is loaded
-  useEffect(() => {
-    if (!scene && meshReady) {
-      console.error("Model error: No scene available");
-      onLoadFailed();
-    }
-  }, [scene, meshReady, onLoadFailed]);
-
-  // Mark when model is successfully loaded
-  useEffect(() => {
-    if (scene && !modelLoaded) {
-      setModelLoaded(true);
-    }
-  }, [scene, modelLoaded]);
-
-  // Clean up model resources on unmount
-  useEffect(() => {
-    return () => {
-      // Properly clean up WebGL resources
-      if (scene) {
-        scene.traverse((object) => {
-          if ((object as THREE.Mesh).isMesh) {
-            const mesh = object as THREE.Mesh;
-            if (mesh.geometry) {
-              mesh.geometry.dispose();
-            }
-            
-            if (mesh.material) {
-              if (Array.isArray(mesh.material)) {
-                mesh.material.forEach(material => material.dispose());
-              } else {
-                mesh.material.dispose();
-              }
-            }
-          }
-        });
-      }
-    };
-  }, [scene]);
-  
-  // Simple rotation animation with controlled frame rate
-  useFrame(() => {
-    if (meshRef.current && scene && modelLoaded) {
-      meshRef.current.rotation.y += rotateRight ? 0.01 : -0.01;
-    }
-  });
-  
-  // Only render when model is ready
-  if (!scene || !meshReady || contextIdRef.current === null) {
-    return null;
-  }
-  
-  // Render the model
-  return (
-    <mesh 
-      ref={meshRef}
-      scale={[1.8, 1.8, 1.8]}
-      position={[0, -0.2, 0]}
-    >
-      <primitive object={scene} />
-    </mesh>
   );
 } 
