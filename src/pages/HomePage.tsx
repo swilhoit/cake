@@ -8,6 +8,51 @@ import * as THREE from 'three';
 import React from 'react';
 import { mainLoaderActive } from '../components/LoadingScreen';
 
+// WebGL Context Manager to limit context creation
+type WebGLContextManagerType = {
+  maxContexts: number;
+  activeContexts: number;
+  canCreateContext: () => boolean;
+  addContext: () => number;
+  removeContext: () => number;
+  resetContextCount: () => void;
+};
+
+// Create a global WebGL context manager
+const WebGLContextManager: WebGLContextManagerType = {
+  maxContexts: 4, // Limit the number of concurrent WebGL contexts
+  activeContexts: 0,
+  
+  canCreateContext() {
+    return this.activeContexts < this.maxContexts;
+  },
+  
+  addContext() {
+    if (this.activeContexts < this.maxContexts) {
+      this.activeContexts += 1;
+      console.log(`WebGL context added. Active contexts: ${this.activeContexts}/${this.maxContexts}`);
+    } else {
+      console.warn(`Cannot create WebGL context. Already at max (${this.maxContexts})`);
+    }
+    return this.activeContexts;
+  },
+  
+  removeContext() {
+    if (this.activeContexts > 0) {
+      this.activeContexts -= 1;
+      console.log(`WebGL context removed. Active contexts: ${this.activeContexts}/${this.maxContexts}`);
+    }
+    return this.activeContexts;
+  },
+  
+  resetContextCount() {
+    const oldCount = this.activeContexts;
+    this.activeContexts = 0;
+    console.log(`WebGL context count reset from ${oldCount} to 0`);
+    return 0;
+  }
+};
+
 // Mock product data for when Shopify products aren't available
 export const mockProducts = [
   { 
@@ -149,6 +194,7 @@ function ProductCard({ product }: { product: any }) {
   const [retryCount, setRetryCount] = useState(0);
   const navigate = useNavigate();
   const [isHovered, setIsHovered] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
 
   // Extract product ID from the Shopify handle or use a default ID
   const productId = product.id ? parseInt(product.id.split('/').pop() || '1', 10) : 1;
@@ -161,16 +207,20 @@ function ProductCard({ product }: { product: any }) {
       return;
     }
     
-    // Only show the model after a delay to ensure initial mount is complete
-    // Shorter delay to show models faster
-    const delay = isMobile ? 200 : 50;
-    
-    const timer = setTimeout(() => {
-      setIsVisible(true);
-    }, delay);
-    
-    return () => clearTimeout(timer);
-  }, [isMobile, shouldUseImages]);
+    // Only show the model after the loading screen is gone
+    if (!mainLoaderActive) {
+      // Only show the model after a delay to ensure initial mount is complete
+      // Shorter delay to show models faster
+      const delay = isMobile ? 200 : 50;
+      
+      const timer = setTimeout(() => {
+        setIsVisible(true);
+        console.log(`Making model visible for product ${productId}`);
+      }, delay);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [isMobile, shouldUseImages, productId, mainLoaderActive]);
 
   // Handle 3D model error with retry mechanism
   const handleModelError = () => {
@@ -178,27 +228,15 @@ function ProductCard({ product }: { product: any }) {
     setModelError(true);
     
     // In production with CORS errors, try a couple of times then fallback
-    const maxRetries = 3;
-    
-    // Try several times to load the model with increasing delays
-    if (retryCount < maxRetries) {
-      const retryDelay = (retryCount + 1) * 500; // 500ms, 1000ms, 1500ms
-      
+    if (retryCount < 2) {
       setTimeout(() => {
-        console.log(`Retrying model load for product ${productId}, attempt ${retryCount + 1}/${maxRetries}`);
         setModelError(false);
         setRetryCount(prev => prev + 1);
-      }, retryDelay);
+      }, 1000); // Try again after 1 second
     } else {
-      // After retries, fall back to image
-      console.log(`Falling back to image for product ${productId} after ${maxRetries} failed attempts`);
+      // After 2 retries, fall back to image
       setUseFallbackImage(true);
     }
-  };
-
-  const handleAddToCart = () => {
-    console.log("Adding to cart:", product.title, "variant:", product.variants[0].id);
-    addToCart(product.variants[0].id, 1);
   };
 
   // Get fallback image URL with better error handling
@@ -206,94 +244,48 @@ function ProductCard({ product }: { product: any }) {
     if (product.images && product.images.length > 0) {
       return product.images[0].src;
     }
-    
-    // Use CDN images instead of local placeholders since local files are empty
-    const placeholders = [
-      "https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=500&auto=format", // Chocolate cake
-      "https://images.unsplash.com/photo-1621303837174-89787a7d4729?w=500&auto=format", // Birthday cake
-      "https://images.unsplash.com/photo-1562777717-dc6984f65a63?w=500&auto=format", // Strawberry cake
-      "https://images.unsplash.com/photo-1586985289688-ca3cf47d3e6e?w=500&auto=format"  // Fancy cake
-    ];
-    
-    return placeholders[productId % placeholders.length];
+    // Use a local placeholder based on product ID
+    return `/images/cakes/default.jpg`;
   };
 
-  // Navigate to the product page
+  // Navigate to product page when clicked
   const goToProductPage = () => {
-    navigate(`/product/${product.id.split('/').pop()}`);
+    const handle = product.handle || `product-${productId}`;
+    navigate(`/product/${handle}`);
   };
 
   return (
     <div 
+      ref={cardRef}
       onClick={goToProductPage} 
-      className="relative h-80 w-full cursor-pointer overflow-visible" 
+      className="relative h-80 w-full shadow-md rounded-lg overflow-hidden cursor-pointer"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
       {useFallbackImage ? (
         <img 
           src={getFallbackImageUrl()} 
-          alt={product.title} 
-          className={`w-full h-full object-contain transition-transform duration-300 ${isHovered ? 'scale-110' : ''}`}
+          alt={product.title}
+          className="w-full h-full object-cover"
+          onError={(e) => {
+            // If the image fails to load, use a very simple colored div as fallback
+            const target = e.target as HTMLImageElement;
+            target.style.display = 'none';
+            target.parentElement!.style.backgroundColor = `hsl(${(productId * 30) % 360}, 70%, 80%)`;
+          }}
         />
-      ) : isVisible && (
-        <Canvas
-          camera={{ position: [0, 0, 4.0], fov: 30 }}
-          dpr={dpr}
-          gl={{ 
-            antialias: true,
-            alpha: true,
-            preserveDrawingBuffer: true,
-            powerPreference: 'default',
-            depth: true
-          }}
-          className="touch-auto"
-          style={{ 
-            background: 'transparent',
-            touchAction: 'none',
-            overflow: 'visible'
-          }}
-          onCreated={({ gl }) => {
-            // Set clear color with full transparency
-            gl.setClearColor(0x000000, 0);
-          }}
-        >
-          <ambientLight intensity={0.8} />
-          <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} intensity={1} castShadow />
-          
-          <Suspense fallback={
-            <ModelLoadingFallback />
-          }>
-            {!modelError ? (
-              <>
-                <Model3D 
-                  scale={isHovered ? 1.5 : 1.3} 
-                  rotationSpeed={isMobile ? 0.003 : 0.005} 
-                  productId={productId} 
-                />
-                {!isMobile && <Environment preset="city" />}
-              </>
-            ) : (
-              <Html center>
-                <div className="flex items-center justify-center">
-                  <div className="text-sm text-red-500 px-3 py-2 rounded-full" style={{ background: 'transparent' }}>
-                    Failed to load model
-                  </div>
-                </div>
-              </Html>
-            )}
-          </Suspense>
-          
-          <OrbitControls
-            enableZoom={false}
-            maxPolarAngle={Math.PI / 2}
-            minPolarAngle={0}
-            rotateSpeed={0.5}
-            enableDamping={isMobile ? false : true}
-            dampingFactor={0.1}
-          />
-        </Canvas>
+      ) : isVisible && !mainLoaderActive && (
+        <div className="w-full h-full relative">
+          <ModelCanvasInstance productId={productId} isHovered={isHovered} />
+        </div>
       )}
+
+      <div className="absolute bottom-0 left-0 w-full bg-white/80 backdrop-blur-sm p-3">
+        <h3 className="text-lg font-semibold text-gray-800">{product.title}</h3>
+        <div className="flex justify-between items-center mt-1">
+          <p className="text-gray-700">${parseFloat(product.variants[0].price).toFixed(2)}</p>
+        </div>
+      </div>
     </div>
   );
 }
@@ -301,6 +293,23 @@ function ProductCard({ product }: { product: any }) {
 export default function HomePage() {
   const { products, loading } = useShopContext();
   const [displayedProducts, setDisplayedProducts] = useState<any[]>([]);
+  const [loaderDismissed, setLoaderDismissed] = useState(false);
+  
+  // Monitor loading screen state
+  useEffect(() => {
+    if (!mainLoaderActive && !loaderDismissed) {
+      console.log("Loading screen dismissed, resetting WebGL contexts");
+      WebGLContextManager.resetContextCount();
+      setLoaderDismissed(true);
+    }
+  }, [mainLoaderActive, loaderDismissed]);
+  
+  // Reset WebGL contexts when component unmounts
+  useEffect(() => {
+    return () => {
+      WebGLContextManager.resetContextCount();
+    };
+  }, []);
   
   useEffect(() => {
     // If there are Shopify products, use them; otherwise, use mock data
@@ -314,18 +323,52 @@ export default function HomePage() {
   }, [products, loading]);
   
   return (
-    <div>
+    <div className="container mx-auto px-4 pb-12">
+      {/* Hero Section */}
+      <section className="py-12 md:py-20">
+        <div className="container mx-auto px-4">
+          <div className="flex flex-col md:flex-row items-center">
+            <div className="md:w-1/2 mb-8 md:mb-0">
+              <h1 className="text-4xl md:text-5xl font-bold mb-4 text-gray-800">
+                Delicious Custom Cakes for Every Occasion
+              </h1>
+              <p className="text-lg text-gray-600 mb-6">
+                Handcrafted with love and the finest ingredients. Perfect for birthdays, weddings, and special celebrations.
+              </p>
+              <Link 
+                to="/shop" 
+                className="inline-block bg-pink-500 text-white font-medium px-6 py-3 rounded-md hover:bg-pink-600 transition shadow-md"
+              >
+                Shop Now
+              </Link>
+            </div>
+            <div className="md:w-1/2 relative h-80 md:h-96">
+              {/* Featured 3D Model */}
+              {!mainLoaderActive && (
+                <div className="w-full h-full">
+                  <ModelCanvasInstance productId={1} isHovered={false} />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+      
       {/* Product Grid Section */}
       <section className="py-12">
         <div className="container mx-auto px-4">
+          <h2 className="text-3xl font-bold mb-8 text-center text-gray-800">Our Popular Cakes</h2>
+          
           {loading ? (
             <div className="flex justify-center items-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-500"></div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {displayedProducts.map((product: any) => (
-                <ProductCard key={product.id} product={product} />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {displayedProducts.slice(0, 8).map((product: any) => (
+                <div key={product.id} className="opacity-100 animate-fadeIn">
+                  <ProductCard product={product} />
+                </div>
               ))}
             </div>
           )}
@@ -339,35 +382,10 @@ export default function HomePage() {
           <div className="text-center mt-12">
             <Link 
               to="/shop" 
-              className="inline-block bg-button-gradient text-gray-800 font-medium px-6 py-3 rounded-md hover:opacity-90 transition shadow-sm"
+              className="inline-block bg-pink-500 text-white font-medium px-6 py-3 rounded-md hover:bg-pink-600 transition shadow-md"
             >
               View All Products
             </Link>
-          </div>
-        </div>
-      </section>
-      
-      {/* Banh Mi Marquee Section with yellow background - Simplified to 1 line */}
-      <section className="py-4 bg-yellow-300 my-8 overflow-visible">
-        <h2 className="sr-only">Banh Mi Section</h2>
-        
-        {/* Marquee Container - Single line only */}
-        <div className="marquee-container relative w-full overflow-visible">
-          {/* Single Marquee - Left to Right - FASTER speed - Increased repetitions */}
-          <div className="marquee-content flex animate-marquee-fast overflow-visible" style={{ paddingLeft: '100%' }}>
-            {/* Increased repetitions to 20 */}
-            {Array.from({ length: 20 }).map((_, index) => (
-              <React.Fragment key={`banh-left-${index}`}>
-                <div className="h-32 w-32 mx-2 overflow-visible">
-                  <BanhMiModelSmall rotateRight={index % 2 === 0} />
-                </div>
-                <div className="flex items-center mx-2">
-                  <h3 className="text-4xl font-black text-black whitespace-nowrap font-rubik">
-                    WE HAVE BANH MIS!
-                  </h3>
-                </div>
-              </React.Fragment>
-            ))}
           </div>
         </div>
       </section>
@@ -451,5 +469,121 @@ function RotatingModel({ url, rotateRight, onLoadFailed }: {
     >
       <primitive object={scene} />
     </mesh>
+  );
+}
+
+// Model canvas instance component to render a single 3D model
+function ModelCanvasInstance({ productId, isHovered }: { productId: number, isHovered: boolean }) {
+  const { isMobile, dpr } = getDeviceCapabilities();
+  const [modelError, setModelError] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+  const [modelLoaded, setModelLoaded] = useState(false);
+  
+  // Skip rendering if the main loader is active
+  if (mainLoaderActive) {
+    return null;
+  }
+  
+  const handleModelError = useCallback(() => {
+    console.error(`Model error for product ${productId}`);
+    setModelError(true);
+    
+    // Retry loading after a delay if we haven't reached max retries
+    if (retryCount < 3) {
+      const timer = setTimeout(() => {
+        setModelError(false);
+        setRetryCount(prev => prev + 1);
+      }, 1000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [productId, retryCount]);
+
+  const handleModelLoaded = useCallback(() => {
+    console.log(`Model loaded successfully for product ${productId}`);
+    setModelLoaded(true);
+  }, [productId]);
+  
+  // Handle WebGL context management
+  useEffect(() => {
+    // Don't add context if loader is active
+    if (mainLoaderActive) return;
+    
+    // Add the context when component mounts
+    WebGLContextManager.addContext();
+    console.log(`Canvas context added for product ${productId}`);
+    
+    // Remove the context when component unmounts
+    return () => {
+      WebGLContextManager.removeContext();
+      console.log(`Canvas context removed for product ${productId}`);
+    };
+  }, [productId]);
+  
+  // Check if we should even try to create a WebGL context
+  if (!WebGLContextManager.canCreateContext()) {
+    return (
+      <div className="flex items-center justify-center w-full h-full bg-gray-100">
+        <p className="text-sm text-gray-500">Too many 3D models active</p>
+      </div>
+    );
+  }
+  
+  return (
+    <Canvas
+      camera={{ position: [0, 0, 4.0], fov: 30 }}
+      dpr={dpr}
+      gl={{ 
+        antialias: true,
+        alpha: true,
+        preserveDrawingBuffer: true,
+        powerPreference: 'default',
+        depth: true
+      }}
+      className="touch-auto"
+      style={{ 
+        background: 'transparent',
+        touchAction: 'none',
+        overflow: 'visible'
+      }}
+      onCreated={({ gl }) => {
+        // Set clear color with full transparency
+        gl.setClearColor(0x000000, 0);
+        console.log(`Canvas created for product ${productId}, mainLoaderActive: ${mainLoaderActive}`);
+      }}
+    >
+      <ambientLight intensity={0.8} />
+      <pointLight position={[10, 10, 10]} intensity={1.0} />
+      <spotLight position={[-10, 10, 10]} angle={0.15} penumbra={1} intensity={1} castShadow={!isMobile} />
+      
+      <Suspense fallback={<ModelLoadingFallback />}>
+        {!modelError ? (
+          <>
+            <Model3D 
+              productId={productId} 
+              scale={1.3}
+              rotationSpeed={isHovered ? 0.01 : 0.005}
+              isDetailView={false}
+            />
+            {!isMobile && <Environment preset="city" />}
+          </>
+        ) : (
+          <Html center>
+            <div className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-full">
+              Failed to load model
+            </div>
+          </Html>
+        )}
+      </Suspense>
+      
+      <OrbitControls
+        enableZoom={false}
+        maxPolarAngle={Math.PI / 2}
+        minPolarAngle={0}
+        rotateSpeed={0.5}
+        enableDamping={!isMobile}
+        dampingFactor={0.1}
+      />
+    </Canvas>
   );
 } 
