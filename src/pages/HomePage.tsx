@@ -367,25 +367,7 @@ export default function HomePage() {
 
 // Smaller Banh Mi model optimized for the marquee
 function BanhMiModelSmall({ rotateRight }: { rotateRight: boolean }) {
-  const meshRef = useRef<THREE.Mesh>(null);
   const modelUrl = "https://storage.googleapis.com/kgbakerycakes/banhmi.glb";
-  
-  // Load the Banh Mi 3D model
-  const { scene } = useGLTF(modelUrl);
-  
-  // Auto-rotation animation with specified direction
-  useFrame(() => {
-    if (meshRef.current) {
-      // Rotate either clockwise or counter-clockwise based on the prop
-      meshRef.current.rotation.y += rotateRight ? 0.03 : -0.03;
-    }
-  });
-  
-  // Clone the model to avoid conflicts
-  const model = useMemo(() => {
-    if (!scene) return new THREE.Group();
-    return scene.clone();
-  }, [scene]);
   
   return (
     <Canvas
@@ -404,17 +386,45 @@ function BanhMiModelSmall({ rotateRight }: { rotateRight: boolean }) {
         gl.setClearColor(0x000000, 0);
       }}
     >
+      {/* Removed background color */}
       <ambientLight intensity={0.8} />
       <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} intensity={1} castShadow />
       
-      <mesh 
-        ref={meshRef}
-        scale={[2.0, 2.0, 2.0]}
-        position={[0, 0, 0]}
-        rotation={[0.1, 0, 0]}
-      >
-        <primitive object={model} />
-      </mesh>
+      {/* Using a separate component for the rotating model */}
+      <RotatingModel url={modelUrl} rotateRight={rotateRight} />
     </Canvas>
+  );
+}
+
+// Separate component for the rotating model that uses the useFrame hook
+function RotatingModel({ url, rotateRight }: { url: string, rotateRight: boolean }) {
+  const meshRef = useRef<THREE.Mesh>(null);
+  
+  // Load the 3D model
+  const { scene } = useGLTF(url);
+  
+  // Auto-rotation animation with specified direction - useFrame must be inside a component that's a child of Canvas
+  useFrame(() => {
+    if (meshRef.current) {
+      // Rotate either clockwise or counter-clockwise based on the prop
+      meshRef.current.rotation.y += rotateRight ? 0.03 : -0.03;
+    }
+  });
+  
+  // Clone the model to avoid conflicts
+  const model = useMemo(() => {
+    if (!scene) return new THREE.Group();
+    return scene.clone();
+  }, [scene]);
+  
+  return (
+    <mesh 
+      ref={meshRef}
+      scale={[2.0, 2.0, 2.0]}
+      position={[0, 0, 0]}
+      rotation={[0.1, 0, 0]}
+    >
+      <primitive object={model} />
+    </mesh>
   );
 } 
