@@ -175,59 +175,24 @@ function ModelLoadingFallback() {
 }
 
 // Product card with 3D model
-function ProductCard({ product }: { product: any }) {
+function ProductCard({ product, index }: { product: any, index: number }) {
   const { addToCart } = useShopContext();
-  const [isVisible, setIsVisible] = useState(true); // Always start visible
+  const [isVisible, setIsVisible] = useState(true);
   const [modelError, setModelError] = useState(false);
-  const [useFallbackImage, setUseFallbackImage] = useState(false); // Never use fallback by default
+  const [useFallbackImage, setUseFallbackImage] = useState(false);
   const { isMobile, shouldUseImages, dpr } = getDeviceCapabilities();
   const [retryCount, setRetryCount] = useState(0);
   const navigate = useNavigate();
   const [isHovered, setIsHovered] = useState(false);
-  const [scaleValue, setScaleValue] = useState(1.3);
+  const [scaleValue] = useState(1.3);
   const [containerScale, setContainerScale] = useState(1);
-  const [rotationSpeed, setRotationSpeed] = useState(isMobile ? 0.003 : 0.005);
-  const [inViewport, setInViewport] = useState(true); // Always start in viewport
   const [modelReady, setModelReady] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // Extract product ID from the Shopify handle or use a default ID
   const productId = product.id ? parseInt(product.id.split('/').pop() || '1', 10) : 1;
 
-  console.log(`[HOME] ProductCard for ID ${productId}: isVisible=${isVisible}, useFallbackImage=${useFallbackImage}, inViewport=${inViewport}`);
-
-  // Setup intersection observer to detect when card is in viewport
-  useEffect(() => {
-    if (!cardRef.current) return;
-    
-    const observer = new IntersectionObserver(
-      (entries) => {
-        // Only set to visible if actually in viewport AND we can create a context
-        if (entries[0].isIntersecting) {
-          setInViewport(true);
-        } else {
-          setInViewport(false);
-        }
-      },
-      { threshold: 0.1 } // Trigger when at least 10% of the element is visible
-    );
-
-    observer.observe(cardRef.current);
-    
-    return () => {
-      if (cardRef.current) {
-        observer.unobserve(cardRef.current);
-      }
-    };
-  }, []);
-
-  // For 3D model loading - simplified to always show
-  useEffect(() => {
-    // Always try to show models
-    console.log(`Setting model visible for product ${productId}`);
-    setIsVisible(true);
-  }, [productId]);
+  console.log(`[HOME] ProductCard for ID ${productId}: isVisible=${isVisible}, useFallbackImage=${useFallbackImage}`);
 
   // Handle model loading complete
   const handleModelLoaded = useCallback(() => {
@@ -248,7 +213,6 @@ function ProductCard({ product }: { product: any }) {
         setRetryCount(prev => prev + 1);
       }, 500 * (retryCount + 1));
     }
-    // Never fall back to images, just keep trying or show error
   }, [productId, retryCount]);
 
   // Get appropriate fallback image URL (only for error placeholders)
@@ -280,7 +244,6 @@ function ProductCard({ product }: { product: any }) {
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {/* Try to show 3D models, only use fallback if explicitly set */}
       {useFallbackImage ? (
         <img 
           src={getFallbackImageUrl()} 
@@ -289,55 +252,16 @@ function ProductCard({ product }: { product: any }) {
           style={{ transform: `scale(${isHovered ? 1.5 : 1})` }}
         />
       ) : (
-        <Canvas
-          ref={canvasRef}
-          camera={{ position: [0, 0, 4.0], fov: 30 }}
-          dpr={dpr}
-          className="!touch-none" /* Fix for mobile touch handling */
-          frameloop={isMobile ? "demand" : "always"} // Only render on demand for mobile
-          style={{ 
-            background: 'transparent',
-            touchAction: 'none',
-            overflow: 'visible',
-            transition: 'transform 0.3s ease-out',
-            transform: `scale(${containerScale})`
-          }}
-          onCreated={({ gl }) => {
-            console.log(`Canvas created for product ${productId}`);
-            WebGLContextManager.addContext();
-            
-            // Set clear color with transparency
-            gl.setClearColor(new THREE.Color('#f8f9fa'), 0);
-            
-            // Apply physical lights if available
-            if ('physicallyCorrectLights' in gl) {
-              (gl as any).physicallyCorrectLights = true;
-            }
-            
-            // Reduce quality for mobile
-            if (isMobile) {
-              gl.shadowMap.enabled = false;
-              if ('powerPreference' in gl) {
-                (gl as any).powerPreference = "low-power";
-              }
-            } else {
-              gl.setPixelRatio(window.devicePixelRatio || 1);
-            }
-            
-            gl.setSize(gl.domElement.clientWidth, gl.domElement.clientHeight);
-          }}
+        <div 
+          className="w-full h-full relative model-placeholder"
+          data-product-id={productId} 
+          data-index={index}
+          style={{ transform: `scale(${isHovered ? 1.1 : 1})` }}
         >
-          <CanvasContent 
-            productId={productId} 
-            scaleValue={scaleValue} 
-            rotationSpeed={rotationSpeed}
-            onModelLoaded={handleModelLoaded}
-            onModelError={handleModelError}
-          />
-        </Canvas>
+          {/* This div will be used as a portal target for the shared canvas */}
+        </div>
       )}
-      
-      {/* Product info overlay */}
+
       <div className="absolute bottom-0 left-0 w-full bg-white bg-opacity-80 p-2">
         <h3 className="text-lg font-bold">{product.title}</h3>
         <p className="text-sm text-gray-700">
@@ -348,72 +272,145 @@ function ProductCard({ product }: { product: any }) {
   );
 }
 
-// Separate component to handle WebGL context cleanup
-function CanvasContent({ 
-  productId, 
-  scaleValue, 
-  rotationSpeed,
-  onModelLoaded,
-  onModelError
-}: { 
-  productId: number, 
-  scaleValue: number, 
-  rotationSpeed: number,
-  onModelLoaded: () => void,
-  onModelError: (error: string) => void
-}) {
-  // Get device capabilities for optimizations
-  const { isMobile } = getDeviceCapabilities();
+// Create a shared canvas component that will render all models
+function SharedModelCanvas({ products }: { products: any[] }) {
+  const { isMobile, dpr } = getDeviceCapabilities();
+  const [visibleModels, setVisibleModels] = useState<Record<string, boolean>>({});
+  const [activeModel, setActiveModel] = useState<number | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   
-  // Clean up WebGL context on unmount
+  // Setup intersection observer to detect which model containers are visible
   useEffect(() => {
+    const containers = document.querySelectorAll('.model-placeholder');
+    
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach(entry => {
+          const productId = entry.target.getAttribute('data-product-id');
+          if (productId) {
+            setVisibleModels(prev => ({
+              ...prev,
+              [productId]: entry.isIntersecting
+            }));
+            
+            // If this model is coming into view and no active model, set it as active
+            if (entry.isIntersecting && activeModel === null) {
+              setActiveModel(parseInt(productId));
+            }
+          }
+        });
+      },
+      { threshold: 0.1 }
+    );
+
+    containers.forEach(container => {
+      observer.observe(container);
+    });
+    
     return () => {
-      WebGLContextManager.removeContext();
-      console.log(`Canvas unmounted for product ${productId}`);
+      containers.forEach(container => {
+        observer.unobserve(container);
+      });
     };
-  }, [productId]);
-
-  // Handle model loading errors
-  const handleError = (error: string) => {
-    console.error(`Error in model ${productId}: ${error}`);
-    onModelError(error);
-  };
-
-  // Handle successful model loads
-  const handleLoad = () => {
-    console.log(`Model ${productId} loaded successfully`);
-    onModelLoaded();
-  };
+  }, [products, activeModel]);
+  
+  // Handle model hover to make it the active one
+  useEffect(() => {
+    const handleMouseEnter = (e: MouseEvent) => {
+      const target = e.currentTarget as HTMLElement;
+      const productId = target.getAttribute('data-product-id');
+      if (productId) {
+        setActiveModel(parseInt(productId));
+      }
+    };
+    
+    const containers = document.querySelectorAll('.model-placeholder');
+    containers.forEach(container => {
+      container.addEventListener('mouseenter', handleMouseEnter as EventListener);
+    });
+    
+    return () => {
+      containers.forEach(container => {
+        container.removeEventListener('mouseenter', handleMouseEnter as EventListener);
+      });
+    };
+  }, [products]);
+  
+  // Portal the canvas to the active model container
+  useEffect(() => {
+    if (activeModel !== null && canvasRef.current) {
+      // Find the container for the active model
+      const container = document.querySelector(`.model-placeholder[data-product-id="${activeModel}"]`);
+      if (container) {
+        // Move the canvas to this container
+        container.appendChild(canvasRef.current);
+      }
+    }
+  }, [activeModel, canvasRef]);
 
   return (
-    <>
-      <ambientLight intensity={0.8} />
-      <pointLight position={[10, 10, 10]} intensity={1.0} />
-      <spotLight position={[-10, 10, 10]} angle={0.15} penumbra={1} intensity={1} castShadow={!isMobile} />
-      
-      <Suspense fallback={<ModelLoadingFallback />}>
-        <>
-          <Model3D 
-            productId={productId} 
-            scale={scaleValue}
-            rotationSpeed={rotationSpeed}
-            isDetailView={false}
-            onLoad={handleLoad}
-            onError={handleError}
-          />
-          {!isMobile && <Environment preset="city" />}
-        </>
-      </Suspense>
-      
-      <OrbitControls
-        enableZoom={false}
-        maxPolarAngle={Math.PI / 2}
-        minPolarAngle={0}
-        rotateSpeed={0.5}
-        enableDamping={!isMobile}
-        dampingFactor={0.1}
-      />
-    </>
+    <div style={{ position: 'fixed', top: '-9999px', left: '-9999px', visibility: 'hidden' }}>
+      <Canvas
+        ref={canvasRef}
+        camera={{ position: [0, 0, 4.0], fov: 30 }}
+        dpr={dpr}
+        className="!touch-none absolute inset-0 w-full h-full"
+        frameloop="always"
+        style={{ 
+          background: 'transparent',
+          position: 'absolute',
+          width: '100%',
+          height: '100%',
+          touchAction: 'none'
+        }}
+        onCreated={({ gl }) => {
+          console.log(`[HOME] Shared Canvas created`);
+          WebGLContextManager.addContext();
+          
+          gl.setClearColor(new THREE.Color('#f8f9fa'), 0);
+          
+          if ('physicallyCorrectLights' in gl) {
+            (gl as any).physicallyCorrectLights = true;
+          }
+          
+          if (isMobile) {
+            gl.shadowMap.enabled = false;
+            if ('powerPreference' in gl) {
+              (gl as any).powerPreference = "low-power";
+            }
+          } else {
+            gl.setPixelRatio(window.devicePixelRatio || 1);
+          }
+        }}
+      >
+        <ambientLight intensity={0.8} />
+        <pointLight position={[10, 10, 10]} intensity={1.0} />
+        <spotLight position={[-10, 10, 10]} angle={0.15} penumbra={1} intensity={1} castShadow={!isMobile} />
+        
+        {activeModel !== null && (
+          <Suspense fallback={<ModelLoadingFallback />}>
+            <>
+              <Model3D 
+                productId={activeModel} 
+                scale={1.3}
+                rotationSpeed={0.005}
+                isDetailView={false}
+              />
+              {!isMobile && <Environment preset="city" />}
+            </>
+          </Suspense>
+        )}
+        
+        <OrbitControls
+          enableZoom={false}
+          maxPolarAngle={Math.PI / 2}
+          minPolarAngle={0}
+          rotateSpeed={0.5}
+          enableDamping={!isMobile}
+          dampingFactor={0.1}
+        />
+      </Canvas>
+    </div>
   );
 }
 
@@ -467,6 +464,11 @@ export default function HomePage() {
       {/* Inject the animation styles */}
       <AnimationStyles />
       
+      {/* Shared Canvas for all models */}
+      {!loading && displayedProducts.length > 0 && (
+        <SharedModelCanvas products={displayedProducts} />
+      )}
+      
       {/* Product Grid Section */}
       <section className="py-12">
         <div className="container mx-auto px-4">
@@ -485,7 +487,7 @@ export default function HomePage() {
                     animationDelay: `${0.1 + index * 0.15}s`
                   }}
                 >
-                  <ProductCard product={product} />
+                  <ProductCard product={product} index={index} />
                 </div>
               ))}
             </div>
