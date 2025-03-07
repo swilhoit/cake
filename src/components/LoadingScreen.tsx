@@ -2,7 +2,20 @@ import React, { useState, useEffect } from 'react';
 import { usePreload } from '../context/PreloadContext';
 
 // Global variable to track if main loader is active
+// Using a more robust approach with a getter/setter
+let _mainLoaderActive = true;
+export const getMainLoaderActive = () => _mainLoaderActive;
+export const setMainLoaderActive = (value: boolean) => {
+  _mainLoaderActive = value;
+  // Dispatch a custom event when the loader state changes
+  window.dispatchEvent(new CustomEvent('loaderStateChange', { detail: { active: value } }));
+};
+// For backward compatibility
 export let mainLoaderActive = true;
+Object.defineProperty(window, 'mainLoaderActive', {
+  get: () => getMainLoaderActive(),
+  set: (value) => setMainLoaderActive(value)
+});
 
 const LoadingScreen: React.FC = () => {
   const { isLoading, progress } = usePreload();
@@ -35,7 +48,7 @@ const LoadingScreen: React.FC = () => {
           
           const hideTimer = setTimeout(() => {
             setShowLoader(false);
-            mainLoaderActive = false;
+            setMainLoaderActive(false);
           }, 800);
           
           return () => clearTimeout(hideTimer);
@@ -48,9 +61,11 @@ const LoadingScreen: React.FC = () => {
   
   // Update global variable when loading state changes
   useEffect(() => {
-    mainLoaderActive = isLoading;
+    setMainLoaderActive(isLoading);
+    
+    // Ensure we clean up properly when component unmounts
     return () => {
-      mainLoaderActive = false;
+      setMainLoaderActive(false);
     };
   }, [isLoading]);
   
@@ -134,7 +149,7 @@ const LoadingScreen: React.FC = () => {
             onClick={() => {
               setIsExiting(true);
               setTimeout(() => setShowLoader(false), 800);
-              mainLoaderActive = false;
+              setMainLoaderActive(false);
             }}
             className="mt-4 px-6 py-2 bg-green-500 text-white rounded-full hover:bg-green-600 transition-colors"
           >

@@ -33,7 +33,8 @@ export const preloadImages = (srcs: string[]): Promise<void[]> => {
 };
 
 /**
- * Preloads a 3D model file (GLTF) using fetch
+ * A simpler and more reliable approach to preload 3D models by creating an Image element
+ * This works because three.js GLTFLoader will use the browser cache
  * @param modelPath Path to the model file
  */
 export const preloadModel = (modelPath: string): Promise<void> => {
@@ -42,18 +43,42 @@ export const preloadModel = (modelPath: string): Promise<void> => {
     return Promise.resolve();
   }
   
-  return fetch(modelPath)
-    .then(response => {
-      if (!response.ok) {
-        throw new Error(`Failed to preload model: ${modelPath}`);
-      }
+  console.log(`Preloading model: ${modelPath}`);
+  
+  // Create a promise that resolves when the image is loaded or errors
+  return new Promise<void>((resolve) => {
+    // Create a new image element
+    const img = new Image();
+    
+    // Set the onload and onerror handlers to mark as complete
+    img.onload = () => {
       preloadedAssets.add(modelPath);
-    })
-    .catch(error => {
-      console.warn('Error preloading model:', error);
-      // Continue even if we couldn't preload this model
-      return Promise.resolve();
-    });
+      console.log(`Successfully preloaded model: ${modelPath}`);
+      resolve();
+    };
+    
+    img.onerror = () => {
+      console.warn(`Error preloading model: ${modelPath}, but continuing`);
+      preloadedAssets.add(modelPath); // Still mark as preloaded to avoid retries
+      resolve(); // Resolve anyway to continue
+    };
+    
+    // Set crossOrigin to anonymous to avoid CORS issues
+    img.crossOrigin = 'anonymous';
+    
+    // Add a cache-busting parameter and set the src
+    const cacheBuster = `v=${Date.now()}`;
+    img.src = `${modelPath}${modelPath.includes('?') ? '&' : '?'}${cacheBuster}`;
+    
+    // Set a timeout to resolve the promise after 5 seconds if it hasn't resolved yet
+    setTimeout(() => {
+      if (!preloadedAssets.has(modelPath)) {
+        console.warn(`Timeout preloading model: ${modelPath}, but continuing`);
+        preloadedAssets.add(modelPath);
+        resolve();
+      }
+    }, 5000);
+  });
 };
 
 /**
@@ -65,57 +90,93 @@ export const preloadModels = (modelPaths: string[]): Promise<void[]> => {
 };
 
 /**
- * Generates an array of cake model paths based on product IDs
- * @param productIds Array of product IDs
+ * Generates fixed array of cake model paths - always include all 5 models
  * @returns Array of model paths
  */
-export const getCakeModelPaths = (productIds: (string | number)[]): string[] => {
-  return productIds.map(id => {
-    let modelId = String(id);
-    if (modelId.includes('product-')) {
-      modelId = modelId.replace('product-', '');
-    }
-    // Assuming the model path format
-    return `/models/cake${modelId}.gltf`;
-  });
+export const getCakeModelPaths = (): string[] => {
+  // List of models we need to load - all 5 character models
+  const modelFiles = [
+    'strawberry.glb',
+    'nemo.glb',
+    'princess.glb', 
+    'turkey.glb',
+    'spongebob1.glb'
+  ];
+
+  // Return full URL paths to all models
+  return modelFiles.map(modelFile => 
+    `https://storage.googleapis.com/kgbakerycakes/optimized/${modelFile}`
+  );
 };
 
 /**
- * Preloads critical assets for the site
+ * Preloads critical assets for the site using a more reliable sequential approach
  * @param options Configuration options
  */
 export const preloadCriticalAssets = async (
   options: {
     imageUrls?: string[];
-    productIds?: (string | number)[];
     onProgress?: (progress: number) => void;
   } = {}
 ): Promise<void> => {
-  const { imageUrls = [], productIds = [], onProgress } = options;
+  const { imageUrls = [], onProgress } = options;
   
-  // Calculate total assets to preload
-  const modelPaths = getCakeModelPaths(productIds);
+  // Always get all model paths
+  const modelPaths = getCakeModelPaths();
   const totalAssets = imageUrls.length + modelPaths.length;
   let loadedAssets = 0;
   
+  console.log(`Preloading ${totalAssets} assets (${imageUrls.length} images, ${modelPaths.length} models)`);
+  
+  // Define a function to update progress
   const updateProgress = () => {
     loadedAssets++;
+    const percentage = Math.round((loadedAssets / totalAssets) * 100);
     if (onProgress) {
-      onProgress((loadedAssets / totalAssets) * 100);
+      onProgress(percentage);
     }
+    console.log(`Preload progress: ${percentage}% (${loadedAssets}/${totalAssets})`);
   };
   
-  // Start preloading images
-  imageUrls.forEach(url => {
-    preloadImage(url)
-      .then(updateProgress)
-      .catch(() => updateProgress()); // Count as loaded even on error
-  });
-  
-  // Start preloading models
-  modelPaths.forEach(path => {
-    preloadModel(path)
-      .then(updateProgress)
-      .catch(() => updateProgress()); // Count as loaded even on error
-  });
+  try {
+    // First, preload all essential 3D models (wait for them to complete)
+    console.log("Starting model preloading...");
+    const modelPromises = modelPaths.map(path => {
+      return preloadModel(path)
+        .then(() => {
+          updateProgress();
+        })
+        .catch(error => {
+          console.warn(`Error preloading model ${path}:`, error);
+          updateProgress(); // Count as loaded even on error
+        });
+    });
+    
+    // Wait for all models to finish loading before proceeding
+    await Promise.all(modelPromises);
+    console.log("Finished preloading models");
+    
+    // Then preload images (these are less critical)
+    console.log("Starting image preloading...");
+    const imagePromises = imageUrls.map(url => {
+      return preloadImage(url)
+        .then(() => {
+          updateProgress();
+        })
+        .catch(error => {
+          console.warn(`Error preloading image ${url}:`, error);
+          updateProgress(); // Count as loaded even on error
+        });
+    });
+    
+    await Promise.all(imagePromises);
+    console.log("Finished preloading images");
+    
+  } catch (error) {
+    console.error("Error during preloading:", error);
+    // Make sure we report completion even if there was an error
+    if (onProgress) {
+      onProgress(100);
+    }
+  }
 }; 

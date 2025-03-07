@@ -2,28 +2,14 @@ import React, { useRef, useState, useEffect, Suspense, useMemo, useCallback } fr
 import { useFrame } from '@react-three/fiber';
 import { useGLTF, Html } from '@react-three/drei';
 import * as THREE from 'three';
-import { mainLoaderActive } from './LoadingScreen';
+import { getMainLoaderActive } from './LoadingScreen';
 
-// Loading indicator component without text
+// Simple loading indicator
 function ModelLoader() {
-  // Check if loader is actually visible in the DOM
-  const loaderElement = document.querySelector('[class*="fixed inset-0 z-"]');
-  const isLoaderVisible = !!loaderElement;
-  
-  // Don't show if the main loader is active and actually visible
-  if (mainLoaderActive && isLoaderVisible) return null;
-  
   return (
     <Html center className="overflow-visible">
-      <div className="flex flex-col items-center justify-center p-4 rounded-lg bg-white/70 backdrop-blur-sm shadow-lg">
-        <div className="flex items-center justify-center">
-          <img 
-            src="/KG_Logo.gif" 
-            alt="Loading" 
-            className="h-16 w-auto object-contain"
-          />
-        </div>
-        <div className="flex space-x-2 mt-3">
+      <div className="flex items-center justify-center p-2 rounded-lg bg-white/70 backdrop-blur-sm shadow-sm">
+        <div className="flex space-x-2">
           <div className="w-2 h-2 rounded-full bg-pink-600 animate-bounce" style={{ animationDelay: '0ms' }}></div>
           <div className="w-2 h-2 rounded-full bg-pink-600 animate-bounce" style={{ animationDelay: '150ms' }}></div>
           <div className="w-2 h-2 rounded-full bg-pink-600 animate-bounce" style={{ animationDelay: '300ms' }}></div>
@@ -33,16 +19,12 @@ function ModelLoader() {
   );
 }
 
-// Error display component without text
+// Simple error display component
 function ModelError({ message }: { message: string }) {
   return (
     <Html center className="overflow-visible">
-      <div className="flex flex-col items-center justify-center p-4 rounded-lg bg-white/70 backdrop-blur-sm shadow-lg">
-        <div className="text-pink-500">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-          </svg>
-        </div>
+      <div className="px-3 py-2 rounded-lg bg-red-50 text-red-500 text-sm">
+        Failed to load model
       </div>
     </Html>
   );
@@ -63,23 +45,6 @@ export default function Model3D({
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-  const [retryCount, setRetryCount] = useState(0);
-  const [forceRender, setForceRender] = useState(false);
-  
-  // Check if loader is actually visible in the DOM
-  const loaderElement = document.querySelector('[class*="fixed inset-0 z-"]');
-  const isLoaderVisible = !!loaderElement;
-  
-  // If loader is not visible but flag is stuck, force render anyway
-  useEffect(() => {
-    if (mainLoaderActive && !isLoaderVisible) {
-      console.log(`Model3D: Loader not visible but flag is true, forcing render`);
-      const timer = setTimeout(() => {
-        setForceRender(true);
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [isLoaderVisible]);
   
   // Extract number from productId (if it exists)
   let idNumber = '1';
@@ -101,45 +66,22 @@ export default function Model3D({
     '8': '#bbdefb', // Light blue
     '9': '#ffebc8', // Peach
     '10': '#e8f5e9', // Mint
-    // Add more colors for other IDs
   };
   
   const bgColor = colorMap[idNumber] || '#f3d2c1';
 
-  // Reset error state when productId changes to allow fresh attempts
-  useEffect(() => {
-    setHasError(false);
-    setErrorMessage("");
-    setRetryCount(0);
-    setIsLoading(true);
-  }, [productId]);
+  // Handle model load completion
+  const handleModelLoad = useCallback(() => {
+    setIsLoading(false);
+  }, []);
   
-  // Handle model error with retry logic
+  // Handle model error
   const handleModelError = useCallback((msg: string) => {
     console.error(`Model error: ${msg}`);
     setHasError(true);
     setErrorMessage(msg);
     setIsLoading(false);
-    
-    // Implement retry logic with increasing delays
-    if (retryCount < 3) {
-      const delay = 500 * (retryCount + 1);
-      console.log(`Retrying model load in ${delay}ms (attempt ${retryCount + 1}/3)`);
-      
-      setTimeout(() => {
-        console.log(`Retrying model load now (attempt ${retryCount + 1}/3)`);
-        setHasError(false);
-        setIsLoading(true);
-        setRetryCount(prev => prev + 1);
-      }, delay);
-    }
-  }, [retryCount]);
-  
-  // Skip rendering if the main loader is active and visible
-  if (mainLoaderActive && !forceRender && isLoaderVisible) {
-    console.log("Model3D: Skipping render due to active loader");
-    return null;
-  }
+  }, []);
   
   return (
     <Suspense fallback={<ModelLoader />}>
@@ -152,7 +94,7 @@ export default function Model3D({
         idNumber={idNumber}
         bgColor={bgColor}
         isDetailView={isDetailView}
-        onLoad={() => setIsLoading(false)} 
+        onLoad={handleModelLoad} 
         onError={handleModelError}
       />
     </Suspense>
@@ -182,28 +124,24 @@ function Model({
   const meshRef = useRef<THREE.Mesh>(null);
   const [modelLoaded, setModelLoaded] = useState(false);
   
-  // Limit the model number to 1-8 (available models)
+  // Limit the model number to 1-5 (available models)
   const idNum = parseInt(idNumber);
-  const modelNum = (!isNaN(idNum) && idNum > 0) ? ((idNum - 1) % 8) + 1 : 1;
+  const modelNum = (!isNaN(idNum) && idNum > 0) ? ((idNum - 1) % 5) + 1 : 1;
   
   // Set the model path - Always use Google Cloud Storage for consistent behavior
   const modelPath = useMemo(() => {
-    // Map model number to specific character models in the optimized directory
-    const characterModels = [
-      'nemo.glb',         // ID 1 or ID % 5 = 1
-      'princess.glb',     // ID 2 or ID % 5 = 2
-      'spongebob1.glb',   // ID 3 or ID % 5 = 3
-      'strawberry.glb',   // ID 4 or ID % 5 = 4
-      'turkey.glb'        // ID 5 or ID % 5 = 0
-    ];
-
-    // Get model file based on product ID (modulo operator ensures we stay within bounds)
-    const modelIndex = (idNum - 1) % characterModels.length;
-    const modelFile = characterModels[modelIndex];
+    // Fixed models that are known to work
+    const modelFile = modelNum === 1 ? 'strawberry.glb' : 
+                     modelNum === 2 ? 'nemo.glb' : 
+                     modelNum === 3 ? 'princess.glb' : 
+                     modelNum === 4 ? 'turkey.glb' : 
+                     'spongebob1.glb';
+    
+    // URL without cache busting to ensure proper loading
     const path = `https://storage.googleapis.com/kgbakerycakes/optimized/${modelFile}`;
     console.log(`Loading character model from: ${path}`);
     return path;
-  }, [idNum]);
+  }, [modelNum]);
   
   // Calculate variant-specific transformations based on ID
   const variantProps = useMemo(() => ({
@@ -227,55 +165,22 @@ function Model({
     // Custom variation title
     variantName: getCakeVariantName(idNum)
   }), [idNum]);
+
+  // Directly load the model without any fancy logic - direct approach
+  const { scene, nodes, materials } = useGLTF(modelPath);
   
-  // Load model with error handling
-  // Use a try-catch block around useGLTF to handle exceptions
-  let scene: THREE.Group | undefined;
-  try {
-    const result = useGLTF(modelPath, undefined, undefined, (error) => {
-      console.error('GLTF loader error:', error);
-      onError(`Failed to load model: ${error}`);
-    });
-    scene = result.scene;
-  } catch (error) {
-    console.error('Error in useGLTF hook:', error);
-    onError(`Exception in model loader: ${error}`);
-  }
-  
-  // Update error handler to watch for changes to scene
+  // Signal successful load if scene is loaded
   useEffect(() => {
-    if (!scene) {
-      onError("Scene failed to load");
-    }
-  }, [scene, onError]);
-  
-  // Clone the model when it loads successfully
-  const model = useMemo(() => {
-    try {
-      if (!scene) {
-        onError("No scene available");
-        return new THREE.Group();
-      }
-      
-      // Clone the scene to avoid conflicts when instances are unmounted
-      const clonedScene = scene.clone();
-      
-      // Set the model as loaded after a short delay to ensure everything is ready
-      setTimeout(() => {
-        if (clonedScene.children.length > 0) {
-          setModelLoaded(true);
-          onLoad();
-        } else {
-          onError("Model loaded but contains no objects");
-        }
-      }, 100);
-      
-      return clonedScene;
-    } catch (error) {
-      onError(`Error cloning scene: ${error}`);
-      return new THREE.Group();
+    if (scene && scene.children && scene.children.length > 0) {
+      setModelLoaded(true);
+      onLoad();
+    } else if (!scene) {
+      onError("Model failed to load");
     }
   }, [scene, onLoad, onError]);
+  
+  // Use the scene directly without cloning for better performance
+  const model = scene;
   
   // Apply color tint to the model based on productId
   useEffect(() => {
@@ -312,7 +217,7 @@ function Model({
 
   // Animation loop - rotate the mesh with custom rotation pattern
   useFrame((state) => {
-    if (meshRef.current) {
+    if (meshRef.current && model) {  // Only animate if we have a model
       // Base rotation with variant-specific direction and speed
       meshRef.current.rotation.y += rotationSpeed * variantProps.rotationDirection * variantProps.rotationSpeedModifier;
       
@@ -330,7 +235,12 @@ function Model({
     }
   });
 
-  // Always attempt to render the actual model
+  // Only render if we have a model
+  if (!model) {
+    return null;
+  }
+
+  // Render the model
   return (
     <mesh 
       ref={meshRef}

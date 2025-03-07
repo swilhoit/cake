@@ -24,58 +24,85 @@ const AssetPreloader = () => {
   useEffect(() => {
     if (preloadStarted) return;
     setPreloadStarted(true);
+    console.log("Starting asset preload process");
     
     // Register critical asset resources
     const criticalResources = [
       'app-init',
       'header-render',
       'footer-render',
-      'homepage-render'
+      'homepage-render',
+      '3d-models',
+      'bakery-images',
     ];
     
     criticalResources.forEach(resource => {
       registerResource(resource);
     });
     
-    // Register important images
+    // Register important images for the site
     const importantImages = [
-      '/images/bakery-storefront.jpg'
+      '/images/bakery-storefront.jpg',
+      '/images/cake-1.jpg',
+      '/images/cake-2.jpg',
+      '/images/cake-3.jpg',
+      '/images/cake-4.jpg',
+      '/KG_Logo.gif',
     ];
     
-    importantImages.forEach((img, index) => {
-      registerResource(`image-${index}`);
-    });
-    
-    // Get product IDs for preloading models
-    const productIds = products.slice(0, 2).map(p => p.id); // Preload only first 2 products to reduce WebGL contexts
-    
-    // Begin preloading assets
+    // Begin preloading assets with a proper progress tracking
     preloadCriticalAssets({
       imageUrls: importantImages,
-      productIds,
       onProgress: (progress) => {
-        // Mark resources as loaded based on progress
-        if (progress >= 25) markResourceLoaded('app-init');
-        if (progress >= 50) markResourceLoaded('header-render');
-        if (progress >= 75) markResourceLoaded('footer-render');
-        if (progress >= 100) markResourceLoaded('homepage-render');
+        // Mark resources as loaded based on progress milestones
+        if (progress >= 20) {
+          markResourceLoaded('app-init');
+          console.log("App init loading complete");
+        }
         
-        // Mark image resources as loaded
+        if (progress >= 40) {
+          markResourceLoaded('header-render');
+          console.log("Header loading complete");
+        }
+        
+        if (progress >= 60) {
+          markResourceLoaded('bakery-images');
+          console.log("Images loading complete");
+        }
+        
+        if (progress >= 80) {
+          markResourceLoaded('footer-render');
+          console.log("Footer loading complete");
+        }
+        
+        if (progress >= 95) {
+          markResourceLoaded('3d-models');
+          console.log("3D models loading complete");
+        }
+        
         if (progress >= 100) {
-          importantImages.forEach((_, index) => {
-            markResourceLoaded(`image-${index}`);
-          });
+          console.log("All preloading complete, showing homepage");
+          markResourceLoaded('homepage-render');
         }
       }
-    });
-    
-    // Add a delay before completing to ensure minimum loading time
-    setTimeout(() => {
+    }).catch(error => {
+      console.error("Error during preloading:", error);
+      // If there's an error during preloading, mark everything as loaded anyway
+      // so the user can still use the site
       criticalResources.forEach(resource => {
         markResourceLoaded(resource);
       });
-    }, 2000);
+    });
     
+    // Safety fallback - if after 10 seconds we're still loading, mark everything as complete
+    const safetyTimeout = setTimeout(() => {
+      console.log("Safety timeout reached, marking all resources as loaded");
+      criticalResources.forEach(resource => {
+        markResourceLoaded(resource);
+      });
+    }, 10000);
+    
+    return () => clearTimeout(safetyTimeout);
   }, [registerResource, markResourceLoaded, products, preloadStarted]);
   
   return null;
@@ -169,11 +196,14 @@ const AppContent = () => {
 };
 
 function App() {
+  // Use a slightly longer minimum loading time to ensure a smooth experience
   return (
-    <PreloadProvider minimumLoadingTime={2000}>
+    <PreloadProvider minimumLoadingTime={5000}>
       <ShopProvider>
         <Router>
-          <Suspense fallback={null}>
+          <Suspense fallback={<div className="fixed inset-0 bg-pink-100 flex items-center justify-center">
+            <div className="animate-spin h-12 w-12 border-4 border-pink-500 rounded-full border-t-transparent"></div>
+          </div>}>
             <AssetPreloader />
             <LoadingScreen />
             <AppContent />
