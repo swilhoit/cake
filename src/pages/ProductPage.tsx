@@ -67,6 +67,46 @@ const isShopifyConfigured = () => {
   }
 };
 
+// Loading component for Suspense fallback
+function ModelLoading() {
+  return (
+    <Html center>
+      <div className="flex flex-col items-center justify-center p-4 rounded-lg bg-white shadow-lg">
+        <div className="flex items-center">
+          <img 
+            src="/KG_Logo.gif" 
+            alt="KG Bakery" 
+            className="h-12 w-auto object-contain"
+          />
+          <span className="ml-3 text-xl font-bold text-gray-800">KG Bakery</span>
+        </div>
+        <div className="flex space-x-2 mt-3">
+          <div className="w-2 h-2 rounded-full bg-pink-600 animate-bounce" style={{ animationDelay: '0ms' }}></div>
+          <div className="w-2 h-2 rounded-full bg-pink-600 animate-bounce" style={{ animationDelay: '150ms' }}></div>
+          <div className="w-2 h-2 rounded-full bg-pink-600 animate-bounce" style={{ animationDelay: '300ms' }}></div>
+        </div>
+        <p className="text-gray-700 text-sm mt-2">Loading cake...</p>
+      </div>
+    </Html>
+  );
+}
+
+// Fallback component for when model fails to load
+function FallbackProduct() {
+  return (
+    <Html center>
+      <div className="flex flex-col items-center justify-center p-4 rounded-lg bg-white shadow-lg">
+        <div className="text-pink-500 mb-2">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+        </div>
+        <p className="text-gray-700 text-sm text-center">Failed to load model</p>
+      </div>
+    </Html>
+  );
+}
+
 export default function ProductPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -325,77 +365,70 @@ export default function ProductPage() {
         <div>
           <div className="rounded-lg overflow-hidden h-96 relative bg-gray-50">
             {useFallbackImage ? (
-              // Use first product image as fallback
-              <img 
-                src={getProductImages()[0]} 
-                alt={product.title} 
-                className="w-full h-full object-contain"
-                onClick={() => handleImageClick(getProductImages()[0])}
-              />
+              <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+                <img 
+                  src={selectedImage || (product?.images && product.images[0])} 
+                  alt={product?.title} 
+                  className="w-full h-auto object-contain"  
+                />
+              </div>
             ) : (
               <Canvas
-                camera={{ position: [0, 0, 4.5], fov: 35 }}
+                camera={{ position: [0, 0, 5], fov: 35 }}
                 dpr={dpr}
-                className="!touch-none" /* Fix for mobile touch handling */
-                frameloop={isMobile ? "demand" : "always"} // Only render on demand for mobile
-                onCreated={({ gl }) => {
-                  // Optimize WebGL context
-                  gl.setClearColor(new THREE.Color('#f8f9fa'), 0);
-                  if ('physicallyCorrectLights' in gl) {
-                    (gl as any).physicallyCorrectLights = true;
-                  }
-                  // Reduce quality for mobile
-                  if (isMobile) {
-                    gl.shadowMap.enabled = false;
-                    if ('powerPreference' in gl) {
-                      (gl as any).powerPreference = "low-power";
-                    }
-                  }
+                gl={{ 
+                  antialias: true,
+                  alpha: true,
+                  preserveDrawingBuffer: true,
+                  powerPreference: 'default',
+                  depth: true
                 }}
-                onError={handleModelError}
+                style={{ 
+                  background: 'transparent',
+                  width: '100%', 
+                  height: '100%',
+                  borderRadius: '0.5rem',
+                  outline: 'none'
+                }}
+                onCreated={({ gl }) => {
+                  // Set clear color with transparency
+                  gl.setClearColor(0xffffff, 0);
+                }}
+                onError={() => handleModelError()}
               >
+                <color attach="background" args={["#ffffff00"]} />
                 <ambientLight intensity={0.8} />
-                <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} intensity={1} castShadow={!isMobile} />
+                <spotLight 
+                  position={[10, 10, 10]} 
+                  angle={0.15} 
+                  penumbra={1} 
+                  intensity={1} 
+                  castShadow 
+                />
                 
-                <Suspense fallback={
-                  <Html center>
-                    <div className="flex items-center justify-center">
-                      <div className="text-sm text-blue-500 bg-blue-50 px-3 py-2 rounded-full">
-                        Loading cake model...
-                      </div>
-                    </div>
-                  </Html>
-                }>
+                <Suspense fallback={<ModelLoading />}>
                   {!modelError ? (
                     <>
                       <Model3D 
-                        scale={1.5} 
-                        rotationSpeed={isMobile ? 0.003 : 0.005} 
-                        productId={productId} 
-                        isDetailView={true} 
-                        onError={handleModelError}
+                        scale={1.8} 
+                        rotationSpeed={0.003} 
+                        productId={id}
+                        isDetailView={true}
                       />
-                      {!isMobile && <Environment preset="city" />}
+                      <Environment preset="city" />
                     </>
                   ) : (
-                    <Html center>
-                      <div className="flex items-center justify-center">
-                        <div className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-full">
-                          Failed to load model
-                        </div>
-                      </div>
-                    </Html>
+                    <FallbackProduct />
                   )}
                 </Suspense>
                 
                 <OrbitControls 
-                  enableZoom={true} 
-                  enablePan={false}
+                  autoRotate={false}
+                  enableZoom={true}
+                  maxZoom={1.5}
+                  minZoom={0.8}
                   maxPolarAngle={Math.PI / 1.5}
                   minPolarAngle={0}
-                  dampingFactor={0.1}
-                  rotateSpeed={0.5}
-                  enableDamping={!isMobile}
                 />
               </Canvas>
             )}

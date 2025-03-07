@@ -27,10 +27,21 @@ const products = [
 function ModelLoading() {
   return (
     <Html center>
-      <div className="flex items-center justify-center">
-        <div className="text-sm text-blue-500 bg-blue-50 px-3 py-2 rounded-full">
-          Loading cake model...
+      <div className="flex flex-col items-center justify-center p-4 rounded-lg bg-white shadow-lg">
+        <div className="flex items-center">
+          <img 
+            src="/KG_Logo.gif" 
+            alt="KG Bakery" 
+            className="h-10 w-auto object-contain"
+          />
+          <span className="ml-3 text-lg font-bold text-gray-800">KG Bakery</span>
         </div>
+        <div className="flex space-x-2 mt-2">
+          <div className="w-2 h-2 rounded-full bg-pink-600 animate-bounce" style={{ animationDelay: '0ms' }}></div>
+          <div className="w-2 h-2 rounded-full bg-pink-600 animate-bounce" style={{ animationDelay: '150ms' }}></div>
+          <div className="w-2 h-2 rounded-full bg-pink-600 animate-bounce" style={{ animationDelay: '300ms' }}></div>
+        </div>
+        <p className="text-gray-700 text-sm mt-1">Loading cake...</p>
       </div>
     </Html>
   );
@@ -40,10 +51,13 @@ function ModelLoading() {
 function ModelError() {
   return (
     <Html center>
-      <div className="flex items-center justify-center">
-        <div className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-full">
-          Failed to load model
+      <div className="flex flex-col items-center justify-center p-4 rounded-lg bg-white shadow-lg">
+        <div className="text-pink-500 mb-2">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
         </div>
+        <p className="text-gray-700 text-sm text-center">Failed to load model</p>
       </div>
     </Html>
   );
@@ -64,23 +78,35 @@ function ProductCard({ product }: { product: typeof products[0] }) {
   }, []);
   
   return (
-    <div className="backdrop-blur-sm overflow-hidden flex flex-col border border-gray-200/20 rounded-lg transition-all duration-300 hover:border-blue-300/30">
+    <div className="backdrop-blur-sm overflow-hidden flex flex-col rounded-lg transition-all duration-300 hover:shadow-lg">
       {/* Further increased height for larger canvas - now taller at 80 (20rem) */}
       <div className="relative h-80 w-full">
         {isVisible && (
           <Canvas
             camera={{ position: [0, 0, 4.0], fov: 30 }}
             dpr={[1, 2]}
+            gl={{ 
+              antialias: true,
+              alpha: true,
+              preserveDrawingBuffer: true,
+              powerPreference: 'default',
+              depth: true
+            }}
             className="!touch-none" /* Fix for mobile touch handling */
+            onCreated={({ gl }) => {
+              // Set clear color with transparency
+              gl.setClearColor(0xffffff, 0);
+            }}
             onError={() => setModelError(true)}
           >
+            <color attach="background" args={["#ffffff00"]} />
             <ambientLight intensity={0.8} />
             <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} intensity={1} castShadow />
             
             <Suspense fallback={<ModelLoading />}>
               {!modelError ? (
                 <>
-                  <Model3D scale={1.3} rotationSpeed={0.005} productId={product.id} />
+                  <Model3D scale={1.365} rotationSpeed={0.005} productId={product.id} />
                   <Environment preset="city" />
                 </>
               ) : (

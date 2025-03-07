@@ -1,489 +1,334 @@
-import { useRef, useState, useEffect, useMemo, Suspense } from 'react';
+import React, { useRef, useState, useEffect, Suspense, useMemo, useCallback } from 'react';
+import { useFrame } from '@react-three/fiber';
+import { useGLTF, Html } from '@react-three/drei';
 import * as THREE from 'three';
-import { Canvas, useFrame, useLoader, useThree } from '@react-three/fiber';
-// Import types without requiring the actual module at runtime
-import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader';
-import { OrbitControls, Environment } from '@react-three/drei';
 
-// Type definition for the GLTFLoader
-interface GLTFLoaderType {
-  load: (
-    url: string,
-    onLoad: (gltf: GLTF) => void,
-    onProgress?: (event: ProgressEvent) => void,
-    onError?: (error: ErrorEvent) => void
-  ) => void;
-  setCrossOrigin: (crossOrigin: string) => void;
-}
-
-// Define a more specific type for dynamic import result
-interface GLTFLoaderModule {
-  GLTFLoader: new () => GLTFLoaderType;
-}
-
-// Set to store model paths that have been checked and don't exist
-const nonExistentModels = new Set<string>();
-// Cache for loaded models to improve performance
-const modelCache: { [key: string]: THREE.Group } = {};
-
-// Base path for model files - change if your file structure is different
-const GCS_URL = 'https://storage.googleapis.com/kgbakerycakes';
-const MODEL_PATH = GCS_URL;
-
-interface Model3DProps {
-  scale?: number;
-  rotationSpeed?: number;
-  productId: number;
-  isDetailView?: boolean;
-  onError?: () => void;
-}
-
-// Detect device performance level to optimize rendering
-const getDevicePerformanceLevel = (): 'high' | 'medium' | 'low' | 'very-low' => {
-  if (typeof window === 'undefined') return 'medium'; // Default for SSR
-
-  // Check for mobile devices
-  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-    navigator.userAgent
+// Loading indicator component that matches site style
+function ModelLoader() {
+  return (
+    <Html center>
+      <div className="flex flex-col items-center justify-center p-4 rounded-lg bg-white shadow-lg">
+        <div className="flex items-center">
+          <img 
+            src="/KG_Logo.gif" 
+            alt="KG Bakery" 
+            className="h-12 w-auto object-contain"
+          />
+          <span className="ml-3 text-xl font-bold text-gray-800">KG Bakery</span>
+        </div>
+        <div className="flex space-x-2 mt-3">
+          <div className="w-2 h-2 rounded-full bg-pink-600 animate-bounce" style={{ animationDelay: '0ms' }}></div>
+          <div className="w-2 h-2 rounded-full bg-pink-600 animate-bounce" style={{ animationDelay: '150ms' }}></div>
+          <div className="w-2 h-2 rounded-full bg-pink-600 animate-bounce" style={{ animationDelay: '300ms' }}></div>
+        </div>
+        <p className="text-gray-700 text-sm mt-2">Loading cake...</p>
+      </div>
+    </Html>
   );
-  
-  // Get hardware capabilities
-  const hardwareConcurrency = navigator.hardwareConcurrency || 4;
-  const memoryInfo = (navigator as any).deviceMemory || 4;
-  
-  // Device pixel ratio helps identify display quality
-  const dpr = window.devicePixelRatio || 1;
-  
-  if (isMobile && hardwareConcurrency <= 2) {
-    return 'very-low';
-  } else if (isMobile || hardwareConcurrency <= 4 || memoryInfo <= 2) {
-    return 'low';
-  } else if (hardwareConcurrency <= 8 || memoryInfo <= 4 || dpr < 2) {
-    return 'medium';
-  } else {
-    return 'high';
-  }
-};
+}
 
-// Detect if code is running in production environment
-const isProduction = (): boolean => {
-  // For development, always return false to attempt to load models
-  if (typeof window !== 'undefined') {
-    const hostname = window.location.hostname;
-    // If it's localhost, we're in development
-    const isDevelopment = hostname === 'localhost' 
-                       || hostname.includes('.local') 
-                       || hostname.startsWith('192.168.')
-                       || hostname.startsWith('127.0.')
-                       || hostname === '';
-    
-    // Return false for development to try loading models
-    return !isDevelopment;
-  }
-  
-  // Default to false to try loading models
-  return false;
-};
+// Error display component
+function ModelError({ message }: { message: string }) {
+  return (
+    <Html center>
+      <div className="flex flex-col items-center justify-center p-4 rounded-lg bg-white shadow-lg">
+        <div className="text-pink-500 mb-2">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+        </div>
+        <p className="text-gray-700 text-sm text-center">{message}</p>
+      </div>
+    </Html>
+  );
+}
 
-// Create a simple cube as fallback model when 3D models can't be loaded
-const createFallbackCube = (): THREE.Group => {
-  const group = new THREE.Group();
-  const geometry = new THREE.BoxGeometry(1, 1, 1);
-  const material = new THREE.MeshStandardMaterial({ color: 0xffe0a3 });
-  const cube = new THREE.Mesh(geometry, material);
-  group.add(cube);
-  return group;
-};
-
-// Function to try several potential model filenames for a given product ID
-const getModelPaths = (productId: number, performanceLevel: string): string[] => {
-  // Try multiple naming conventions in order of preference
-  const possibleNames = [
-    // Standard naming convention using product ID
-    `cake_${productId}.glb`,
-    
-    // Try with underscores
-    `cake_model_${productId}.glb`,
-    
-    // Try with hyphens
-    `cake-${productId}.glb`,
-    `cake-model-${productId}.glb`,
-    
-    // Try without product ID prefix (just the ID)
-    `${productId}.glb`,
-    
-    // Try with 'model' prefix
-    `model_${productId}.glb`,
-    
-    // Try generic cake models
-    'cake_model.glb',
-    'cake.glb'
-  ];
-  
-  // For low performance levels, add variants
-  if (performanceLevel === 'low' || performanceLevel === 'very-low') {
-    possibleNames.unshift(
-      `cake_${productId}_low.glb`,
-      `cake_model_${productId}_low.glb`,
-      `cake-${productId}-low.glb`,
-      `cake-model-${productId}-low.glb`,
-      `${productId}_low.glb`
-    );
-  }
-  
-  // Return full paths
-  return possibleNames.map(name => `${MODEL_PATH}/${name}`);
-};
-
+// Main Model3D component - loads and displays 3D cake models
 export default function Model3D({ 
   scale = 1, 
-  rotationSpeed = 0.01, 
+  rotationSpeed = 0.005, 
+  productId,
+  isDetailView = false
+}: { 
+  scale?: number; 
+  rotationSpeed?: number; 
+  productId?: string | number;
+  isDetailView?: boolean;
+}) {
+  const [isLoading, setIsLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  
+  // Extract number from productId (if it exists)
+  let idNumber = '1';
+  if (typeof productId === 'string' && productId) {
+    idNumber = productId.replace('product-', '');
+  } else if (typeof productId === 'number') {
+    idNumber = productId.toString();
+  }
+  
+  // Product ID-based color for visual differentiation
+  const colorMap: Record<string, string> = {
+    '1': '#f8d7da', // Pink
+    '2': '#d1e7dd', // Green
+    '3': '#cfe2ff', // Blue
+    '4': '#fff3cd', // Yellow
+    '5': '#e2e3e5', // Gray
+    '6': '#d1c4e9', // Purple
+    '7': '#ffccbc', // Orange
+    '8': '#bbdefb', // Light blue
+    '9': '#ffebc8', // Peach
+    '10': '#e8f5e9', // Mint
+    // Add more colors for other IDs
+  };
+  
+  const bgColor = colorMap[idNumber] || '#f3d2c1';
+  
+  return (
+    <Suspense fallback={<ModelLoader />}>
+      {isLoading && <ModelLoader />}
+      {hasError && <ModelError message={errorMessage} />}
+      <Model 
+        scale={scale} 
+        rotationSpeed={rotationSpeed}
+        productId={productId}
+        idNumber={idNumber}
+        bgColor={bgColor}
+        isDetailView={isDetailView}
+        onLoad={() => setIsLoading(false)} 
+        onError={(msg: string) => {
+          setIsLoading(false);
+          setHasError(true);
+          setErrorMessage(msg);
+        }}
+      />
+    </Suspense>
+  );
+}
+
+// The actual model component that will be wrapped in Suspense
+function Model({ 
+  scale, 
+  rotationSpeed, 
   productId, 
-  isDetailView = false,
-  onError 
-}: Model3DProps) {
-  // Use a reference to the mesh to manipulate it in the render loop
+  idNumber, 
+  bgColor, 
+  isDetailView,
+  onLoad,
+  onError
+}: { 
+  scale: number; 
+  rotationSpeed: number; 
+  productId?: string | number;
+  idNumber: string;
+  bgColor: string;
+  isDetailView: boolean;
+  onLoad: () => void;
+  onError: (message: string) => void;
+}) {
   const meshRef = useRef<THREE.Mesh>(null);
-  const [isRendered, setIsRendered] = useState(false);
   const [modelLoaded, setModelLoaded] = useState(false);
-  const [modelLoadFailed, setModelLoadFailed] = useState(false);
-  const performanceLevel = getDevicePerformanceLevel();
+  const [showFallback, setShowFallback] = useState(false);
   
-  // Optimize based on device performance level
-  const performanceSettings = {
-    'very-low': {
-      scale: scale * 0.7,
-      rotationSpeed: rotationSpeed * 0.25,
-      useMeshBasicMaterial: true,
-      skipLighting: true,
-      memoryOptimized: true
-    },
-    'low': {
-      scale: scale * 0.8,
-      rotationSpeed: rotationSpeed * 0.5,
-      useMeshBasicMaterial: true,
-      skipLighting: false,
-      memoryOptimized: true
-    },
-    'medium': {
-      scale: scale,
-      rotationSpeed: rotationSpeed * 0.75,
-      useMeshBasicMaterial: false,
-      skipLighting: false,
-      memoryOptimized: false
-    },
-    'high': {
-      scale: scale,
-      rotationSpeed: rotationSpeed,
-      useMeshBasicMaterial: false,
-      skipLighting: false,
-      memoryOptimized: false
-    }
-  };
+  // Handle local models for development to avoid CORS issues
+  const idNum = parseInt(idNumber);
+  const modelNum = (!isNaN(idNum) && idNum > 0 && idNum <= 10) ? idNum : 1;
   
-  // Get settings based on performance level
-  const settings = performanceSettings[performanceLevel];
+  // In development environment, use a local model file to avoid CORS issues
+  const isDevelopment = process.env.NODE_ENV === 'development';
+  // To avoid too many re-renders, we set the model path once and don't change it
+  const modelPath = useMemo(() => {
+    return isDevelopment
+      ? `/models/model.glb` // Use local placeholder model
+      : `https://storage.googleapis.com/kgbakerycakes/cake_model_${modelNum}.glb`;
+  }, [isDevelopment, modelNum]);
   
-  // Add slight variation based on product ID
-  const adjustedRotationSpeed = settings.rotationSpeed * (1 + (productId % 5) * 0.1);
-  const finalScale = settings.scale;
-  
-  // Get list of possible model paths to try
-  const modelPaths = getModelPaths(productId, performanceLevel);
-  
-  // Use a model loader wrapper to handle loading and errors
-  const loadModel = async (): Promise<THREE.Group> => {
-    let lastError: Error | null = null;
+  // Calculate variant-specific transformations based on ID
+  const variantProps = useMemo(() => ({
+    // Base scale for this cake variant (multiplied by the prop scale)
+    baseScale: 0.9 + (idNum % 3) * 0.1,
     
-    console.log(`🍰 Attempting to load model for Product ID: ${productId}`);
-    console.log(`💡 Using performance level: ${performanceLevel}`);
-    console.log(`🔍 Will try these model paths in order:`, modelPaths);
+    // Different rotation speeds and directions
+    rotationDirection: idNum % 2 === 0 ? 1 : -1,
+    rotationSpeedModifier: 0.8 + (idNum % 3) * 0.2,
     
-    // Try each path in sequence until one works
-    for (const modelPath of modelPaths) {
-      try {
-        console.log(`🔄 Attempting to load model from: ${modelPath}`);
-        
-        // Check cache first
-        if (modelCache[modelPath]) {
-          console.log(`✅ Using cached model from ${modelPath}`);
-          return modelCache[modelPath].clone();
-        }
-        
-        // Dynamic import for GLTFLoader
-        const GLTFModule = await import('three/examples/jsm/loaders/GLTFLoader') as GLTFLoaderModule;
-        const loader = new GLTFModule.GLTFLoader();
-        
-        // Set cross-origin to anonymous to allow loading from other domains (like GCS)
-        loader.setCrossOrigin('anonymous');
-        
-        // Load the model with a Promise wrapper around the loader
-        const model = await new Promise<THREE.Group>((resolve, reject) => {
-          loader.load(
-            modelPath,
-            (gltf: GLTF) => {
-              console.log(`✅ Model loaded successfully from ${modelPath}!`);
-              const model = gltf.scene.clone();
-              
-              // Store in cache for future use
-              modelCache[modelPath] = model.clone();
-              
-              // Set the model path so we know which one succeeded
-              setModelPath(modelPath);
-              
-              resolve(model);
-            },
-            (progress: ProgressEvent) => {
-              // Optional progress callback
-              if (progress.total > 0) {
-                const percent = Math.round((progress.loaded / progress.total) * 100);
-                console.log(`📊 Loading ${modelPath}: ${percent}% (${Math.round(progress.loaded / 1024)}KB/${Math.round(progress.total / 1024)}KB)`);
-              }
-            },
-            (error: ErrorEvent) => {
-              console.error(`❌ Error loading model from ${modelPath}:`, error);
-              reject(error);
-            }
-          );
-        });
-        
-        // If we got here, we successfully loaded a model
-        return model;
-      } catch (error) {
-        console.error(`❌ Failed to load model from ${modelPath}`, error);
-        lastError = error as Error;
-        // Continue to the next path
-      }
-    }
+    // Position offset to make them look different
+    positionY: (idNum % 3 - 1) * 0.2,
     
-    // If we get here, all paths failed
-    console.error("❌ All model loading attempts failed for product ID:", productId);
-    throw lastError || new Error("Failed to load any model");
-  };
+    // Some cakes can have a slight tilt
+    tiltX: (idNum % 4 - 2) * 0.1,
+    tiltZ: (idNum % 5 - 2) * 0.1,
+    
+    // For detail view, different position adjustment
+    detailPositionY: -1 + (idNum % 3 - 1) * 0.3,
+    
+    // Custom variation title
+    variantName: getCakeVariantName(idNum)
+  }), [idNum]);
   
-  // State to track if we're using a fallback cube
-  const [usingFallback, setUsingFallback] = useState(false);
-  const [modelPath, setModelPath] = useState<string | null>(null);
-  // Keep track of the loaded model to render it
-  const [loadedModel, setLoadedModel] = useState<THREE.Group | null>(null);
+  // Fallback box for when model fails to load - this is a memoized component to prevent re-renders
+  const FallbackBox = useMemo(() => {
+    return (
+      <>
+        <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial color={bgColor} />
+      </>
+    );
+  }, [bgColor]);
   
-  // Use a fallback model in production or if the model file doesn't exist
-  useEffect(() => {
-    if (!isProduction()) {
-      // In development, try to load the model
-      loadModel()
-        .then((model) => {
-          console.log("Model loaded successfully, setting loaded model for rendering");
-          setModelLoaded(true);
-          setUsingFallback(false);
-          setLoadedModel(model); // Store the loaded model
-          if (modelPath) {
-            console.log(`Successfully loaded model from: ${modelPath}`);
-          }
-        })
-        .catch((error) => {
-          console.error("Failed to load model, using fallback:", error);
-          setModelLoadFailed(true);
-          setUsingFallback(true);
-          setLoadedModel(createFallbackCube()); // Use fallback cube
-          if (onError) onError();
-        });
-    } else {
-      // In production, use the fallback directly
-      setUsingFallback(true);
-      setLoadedModel(createFallbackCube()); // Use fallback cube
-    }
-  }, [productId, isProduction, onError]);
+  // Create error handling function that's stable between renders  
+  const handleError = useCallback((error: any) => {
+    console.warn(`Error loading model from ${modelPath}:`, error);
+    setShowFallback(true);
+    onError(`Could not load cake model: ${error && typeof error === 'object' ? String(error) : 'Unknown error'}`);
+  }, [modelPath, onError]);
+
+  // Create success handling function that's stable between renders
+  const handleLoad = useCallback(() => {
+    setModelLoaded(true);
+    onLoad();
+  }, [onLoad]);
   
-  // Create a simple model (either loaded or fallback)
+  // Load model with error handling
+  const { scene } = useGLTF(modelPath);
+  
+  // Clone the model when it loads successfully
   const model = useMemo(() => {
-    if (loadedModel) {
-      return loadedModel;
+    try {
+      if (!scene) {
+        handleError("No scene available");
+        return new THREE.Group();
+      }
+      
+      // Clone the scene to avoid conflicts when instances are unmounted
+      const clonedScene = scene.clone();
+      
+      // Set the model as loaded after a short delay to ensure everything is ready
+      setTimeout(() => {
+        if (clonedScene.children.length > 0) {
+          handleLoad();
+        } else {
+          handleError("Model loaded but contains no objects");
+        }
+      }, 100);
+      
+      return clonedScene;
+    } catch (error) {
+      handleError(error);
+      return new THREE.Group();
     }
-    if (usingFallback) {
-      return createFallbackCube();
-    }
-    // Return a group that will be populated when the model loads
-    return new THREE.Group();
-  }, [loadedModel, usingFallback]);
+  }, [scene, handleLoad, handleError]);
   
-  // Handle rotation animation
-  useFrame(() => {
+  // Apply color tint to the model based on productId
+  useEffect(() => {
+    if (!model || model.children.length === 0) return;
+    
+    try {
+      model.traverse((child) => {
+        if (child instanceof THREE.Mesh && child.material) {
+          // Create a copy of the material to avoid affecting other instances
+          if (Array.isArray(child.material)) {
+            child.material = child.material.map(m => {
+              const newMat = m.clone();
+              // Apply a subtle tint to the material
+              if (newMat.color) {
+                const color = new THREE.Color(bgColor);
+                newMat.color.lerp(color, 0.15); // Very subtle tint
+              }
+              return newMat;
+            });
+          } else {
+            const newMat = child.material.clone();
+            if (newMat.color) {
+              const color = new THREE.Color(bgColor);
+              newMat.color.lerp(color, 0.15); // Very subtle tint
+            }
+            child.material = newMat;
+          }
+        }
+      });
+    } catch (error) {
+      console.warn("Error applying material tint:", error);
+      handleError(error);
+    }
+  }, [model, bgColor, handleError]);
+
+  // Animation loop - rotate the mesh with custom rotation pattern
+  useFrame((state) => {
     if (meshRef.current) {
-      // Rotate around Y axis
-      meshRef.current.rotation.y += adjustedRotationSpeed;
+      // Base rotation with variant-specific direction and speed
+      meshRef.current.rotation.y += rotationSpeed * variantProps.rotationDirection * variantProps.rotationSpeedModifier;
       
-      // Add slight backward tilt (about 10 degrees) - converted to radians
-      const backwardTilt = 0.17; // Approximately 10 degrees in radians, positive for backward tilt
-      
-      // Add slight wobble in detail view for more dynamic appearance
-      if (isDetailView) {
-        // Apply backward tilt plus a small wobble
-        meshRef.current.rotation.x = backwardTilt + Math.sin(Date.now() * 0.001) * 0.05;
-      } else {
-        // Apply constant backward tilt for non-detail view
-        meshRef.current.rotation.x = backwardTilt;
+      // Even-numbered cakes have a gentle floating motion (up and down)
+      if (idNum % 2 === 0) {
+        const time = state.clock.getElapsedTime();
+        meshRef.current.position.y = variantProps.positionY + Math.sin(time * 0.5) * 0.05;
+      } 
+      // Odd-numbered cakes have a slight wobble
+      else {
+        const time = state.clock.getElapsedTime();
+        meshRef.current.rotation.z = variantProps.tiltZ + Math.sin(time * 0.7) * 0.02;
+        meshRef.current.rotation.x = variantProps.tiltX + Math.sin(time * 0.4) * 0.02;
       }
     }
   });
-  
-  // Effect to notify parent component when rendered
-  useEffect(() => {
-    // Use requestAnimationFrame to ensure component is fully rendered
-    const timer = requestAnimationFrame(() => {
-      setIsRendered(true);
-    });
-    
-    // Cleanup function
-    return () => {
-      cancelAnimationFrame(timer);
-    };
-  }, []);
-  
-  // Effect to notify parent if model fails to load
-  useEffect(() => {
-    if (modelLoadFailed && onError) {
-      onError();
-    }
-  }, [modelLoadFailed, onError]);
-  
-  // When component unmounts or when product changes, clean up resources
-  useEffect(() => {
-    // Cleanup function
-    return () => {
-      const cleanupResources = () => {
-        // Advanced memory management to prevent memory leaks
-        if (model && 'traverse' in model) {
-          model.traverse((child: THREE.Object3D) => {
-            if (child instanceof THREE.Mesh) {
-              // Dispose of geometries and materials
-              if (child.geometry) child.geometry.dispose();
-              
-              if (child.material) {
-                if (Array.isArray(child.material)) {
-                  child.material.forEach(material => material.dispose());
-                } else {
-                  child.material.dispose();
-                }
-              }
-            }
-          });
-        }
-      };
-      
-      cleanupResources();
-    };
-  }, [productId]);
 
-  // Position, scale, and center the model on first render or when it changes
-  useEffect(() => {
-    if (meshRef.current && model) {
-      try {
-        // Center the model
-        const box = new THREE.Box3().setFromObject(model);
-        const center = box.getCenter(new THREE.Vector3());
-        const size = box.getSize(new THREE.Vector3());
-        
-        // Calculate appropriate scale
-        const maxDimension = Math.max(size.x, size.y, size.z);
-        if (maxDimension > 0) {
-          // If we have a valid size, apply scale
-          const targetSize = 1.5; // Target size in world units
-          const autoScale = targetSize / maxDimension;
-          model.scale.set(
-            autoScale * finalScale,
-            autoScale * finalScale,
-            autoScale * finalScale
-          );
-        } else {
-          // Default scale if we can't determine size
-          model.scale.set(finalScale, finalScale, finalScale);
-        }
-        
-        // Center the model
-        model.position.set(-center.x, -center.y, -center.z);
-        
-        console.log(`Model dimensions: ${size.x.toFixed(2)} x ${size.y.toFixed(2)} x ${size.z.toFixed(2)}`);
-      } catch (e) {
-        console.error("Error positioning model:", e);
-      }
-    }
-  }, [model, meshRef.current, finalScale]);
-  
-  // Use a simple primitive for the model - this is what's used in ProductPage
+  // Show the actual model if it loaded correctly, otherwise show error or fallback
   return (
-    <mesh ref={meshRef}>
-      <primitive object={model} />
+    <mesh 
+      ref={meshRef}
+      scale={[
+        scale * variantProps.baseScale,
+        scale * variantProps.baseScale,
+        scale * variantProps.baseScale
+      ]}
+      position={[0, isDetailView ? variantProps.detailPositionY : variantProps.positionY, 0]}
+      rotation={[variantProps.tiltX, 0, variantProps.tiltZ]}
+    >
+      {/* If model failed to load but didn't throw an error, show a fallback box */}
+      {showFallback || !model || model.children.length === 0 ? (
+        FallbackBox
+      ) : (
+        // Otherwise show the loaded model
+        <primitive object={model} />
+      )}
+      
+      {/* If in detail view, add product information */}
+      {isDetailView && modelLoaded && (
+        <Html
+          position={[0, 1.5, 0]}
+          center
+          className="pointer-events-none"
+          style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}
+        >
+          <div className="bg-white/90 backdrop-blur-sm rounded-lg px-3 py-1 text-xs text-gray-700 shadow-md">
+            {variantProps.variantName}
+          </div>
+        </Html>
+      )}
     </mesh>
   );
 }
 
-// Wrapper component with necessary Three.js setup
-export function Model3DWrapper({ 
-  productId,
-  isDetailView = false,
-  onError 
-}: Model3DProps) {
-  const [loaded, setLoaded] = useState(false);
-  const [error, setError] = useState(false);
+// Get a cake variant name based on ID number for visual differentiation
+function getCakeVariantName(id: number): string {
+  const variants = [
+    "Classic Vanilla",
+    "Triple Chocolate",
+    "Strawberry Dream",
+    "Lemon Zest",
+    "Spiced Carrot",
+    "Blueberry Burst",
+    "Red Velvet",
+    "Coconut Cream",
+    "Marble Swirl",
+    "Black Forest"
+  ];
   
-  // Detect device capabilities for rendering optimization
-  const { isMobile, memoryLimited } = useMemo(() => {
-    if (typeof window === 'undefined') return { isMobile: false, memoryLimited: false };
-    
-    const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera || '';
-    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
-    
-    // Check memory constraints
-    const memoryLimited = isMobile || (navigator as any).deviceMemory < 4;
-    
-    return { isMobile, memoryLimited };
-  }, []);
-  
-  // Calculate optimal pixel ratio based on device
-  const pixelRatio = useMemo((): [number, number] => {
-    if (memoryLimited) return [1, 1]; // Use lowest setting for memory-limited devices
-    if (isMobile) return [1, 2]; // Cap at 2x for mobile
-    return [1, 2]; // Default range for desktops
-  }, [isMobile, memoryLimited]);
-  
-  const handleError = () => {
-    setError(true);
-    if (onError) onError();
-  };
-  
-  // Fast path for production to avoid 3D rendering completely
-  if (isProduction()) {
-    useEffect(() => {
-      // In production, always trigger the error callback to use fallback image
-      handleError();
-    }, [handleError]);
-    
-    // Return an empty div to maintain layout
-    return <div className="w-full h-full bg-gray-50" />;
+  // If ID is valid (1-10), return the corresponding variant name
+  if (id >= 1 && id <= variants.length) {
+    return variants[id - 1];
   }
   
-  const scale = isDetailView ? 2.5 : 1.3;
-  const rotationSpeed = isDetailView ? 0.003 : 0.01;
-  
-  return (
-    <Canvas dpr={pixelRatio} camera={{ position: [0, 0, 5], fov: 45 }}>
-      <Suspense fallback={null}>
-        <ambientLight intensity={0.7} />
-        <spotLight intensity={0.5} position={[10, 10, 10]} angle={0.15} penumbra={1} />
-        <pointLight position={[-10, -10, -10]} />
-        
-        <Model3D 
-          scale={scale} 
-          rotationSpeed={rotationSpeed} 
-          productId={productId}
-          isDetailView={isDetailView}
-          onError={handleError}
-        />
-        
-        {isDetailView && <OrbitControls enableZoom={true} />}
-        <Environment preset="sunset" />
-      </Suspense>
-    </Canvas>
-  );
+  return "Custom Cake";
 } 

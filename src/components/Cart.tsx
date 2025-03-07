@@ -53,10 +53,10 @@ export default function Cart() {
         isCartOpen ? 'bg-black bg-opacity-50 pointer-events-auto' : 'bg-opacity-0 pointer-events-none'
       }`}
     >
-      <div className="absolute right-0 h-full pr-4 pl-4 md:pl-0 flex items-start pt-4 md:pt-8">
+      <div className="absolute right-0 h-full flex items-start">
         <div 
           ref={cartRef}
-          className={`bg-white w-full max-w-md h-[calc(100%-2rem)] md:h-[calc(100%-4rem)] shadow-lg flex flex-col rounded-xl transition-transform duration-300 ease-in-out ${
+          className={`bg-white w-full max-w-md md:max-w-2xl lg:max-w-3xl h-full shadow-lg flex flex-col transition-transform duration-300 ease-in-out ${
             isCartOpen ? 'transform-none' : 'translate-x-full'
           }`}
         >
