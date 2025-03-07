@@ -22,6 +22,27 @@ const LoadingScreen: React.FC = () => {
     "Check out our monthly special flavors in the shop!"
   ];
   
+  // Check if progress is complete and trigger green flash
+  useEffect(() => {
+    if (progress >= 100) {
+      setProgressComplete(true);
+      
+      // Auto-exit after 0.5 seconds at 100% progress
+      const autoExitTimer = setTimeout(() => {
+        setIsExiting(true);
+        
+        const hideTimer = setTimeout(() => {
+          setShowLoader(false);
+          mainLoaderActive = false;
+        }, 800);
+        
+        return () => clearTimeout(hideTimer);
+      }, 500);
+      
+      return () => clearTimeout(autoExitTimer);
+    }
+  }, [progress]);
+  
   // Force exit if progress is 100% and loading is stuck
   useEffect(() => {
     if (progress >= 100) {
@@ -128,19 +149,6 @@ const LoadingScreen: React.FC = () => {
         </div>
         
         <p className="text-sm text-gray-500">{Math.round(progress)}% loaded</p>
-        
-        {progressComplete && (
-          <button 
-            onClick={() => {
-              setIsExiting(true);
-              setTimeout(() => setShowLoader(false), 800);
-              mainLoaderActive = false;
-            }}
-            className="mt-4 px-6 py-2 bg-green-500 text-white rounded-full hover:bg-green-600 transition-colors"
-          >
-            Enter Site
-          </button>
-        )}
       </div>
     </div>
   );

@@ -234,7 +234,7 @@ function ProductCard({ product }: { product: any }) {
         <img 
           src={getFallbackImageUrl()} 
           alt={product.title} 
-          className={`w-full h-full object-contain transition-transform duration-300 ${isHovered ? 'scale-110' : ''}`}
+          className={`w-full h-full object-contain transition-transform duration-300 ${isHovered ? 'scale-150' : ''}`}
         />
       ) : isVisible && (
         <Canvas
@@ -251,7 +251,9 @@ function ProductCard({ product }: { product: any }) {
           style={{ 
             background: 'transparent',
             touchAction: 'none',
-            overflow: 'visible'
+            overflow: 'visible',
+            transition: 'transform 0.3s ease-out',
+            transform: isHovered ? 'scale(1.2)' : 'scale(1)'
           }}
           onCreated={({ gl }) => {
             // Set clear color with full transparency
@@ -267,8 +269,8 @@ function ProductCard({ product }: { product: any }) {
             {!modelError ? (
               <>
                 <Model3D 
-                  scale={isHovered ? 1.5 : 1.3} 
-                  rotationSpeed={isMobile ? 0.003 : 0.005} 
+                  scale={isHovered ? 2.0 : 1.3} 
+                  rotationSpeed={isMobile ? 0.003 : isHovered ? 0.01 : 0.005} 
                   productId={productId} 
                 />
                 {!isMobile && <Environment preset="city" />}
