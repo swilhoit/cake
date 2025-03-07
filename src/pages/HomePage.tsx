@@ -1,49 +1,12 @@
-import { Link, useNavigate } from 'react-router-dom';
-import { Suspense, useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { useShopContext } from '../context/ShopContext';
+import Model3D from '../components/Model3D';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Environment, Html, useGLTF } from '@react-three/drei';
-import Model3D from '../components/Model3D';
+import { Suspense, useState, useEffect, useRef, ReactNode } from 'react';
 import * as THREE from 'three';
-import React from 'react';
-import { mainLoaderActive } from '../components/LoadingScreen';
-
-// WebGL Context Manager to limit context creation
-type WebGLContextManagerType = {
-  maxContexts: number;
-  activeContexts: number;
-  canCreateContext: () => boolean;
-  addContext: () => number;
-  removeContext: () => number;
-};
-
-// Create a global WebGL context manager
-const WebGLContextManager: WebGLContextManagerType = {
-  maxContexts: 4, // Reduce from 8 to 4 for more safety
-  activeContexts: 0,
-  
-  canCreateContext() {
-    return this.activeContexts < this.maxContexts;
-  },
-  
-  addContext() {
-    if (this.activeContexts < this.maxContexts) {
-      this.activeContexts += 1;
-      console.log(`WebGL context added. Active contexts: ${this.activeContexts}/${this.maxContexts}`);
-    } else {
-      console.warn(`Cannot create WebGL context. Already at max (${this.maxContexts})`);
-    }
-    return this.activeContexts;
-  },
-  
-  removeContext() {
-    if (this.activeContexts > 0) {
-      this.activeContexts -= 1;
-      console.log(`WebGL context removed. Active contexts: ${this.activeContexts}/${this.maxContexts}`);
-    }
-    return this.activeContexts;
-  }
-};
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { getMainLoaderActive } from '../components/LoadingScreen';
 
 // Mock product data for when Shopify products aren't available
 export const mockProducts = [
@@ -102,72 +65,47 @@ export const mockProducts = [
     description: 'Coconut cake with coconut cream and toasted coconut flakes',
     variants: [{ id: 'variant8', price: '31.99' }],
     images: [{ src: "https://images.unsplash.com/photo-1614707267537-b85aaf00c4b7?w=500&auto=format" }]
-  },
-  { 
-    id: 'gid://shopify/Product/9', 
-    title: 'Tiramisu Delight', 
-    description: 'Coffee-soaked layers with mascarpone cream and cocoa dusting',
-    variants: [{ id: 'variant9', price: '36.99' }],
-    images: [{ src: "https://images.unsplash.com/photo-1571115177098-24ec42ed204d?w=500&auto=format" }]
-  },
-  { 
-    id: 'gid://shopify/Product/10', 
-    title: 'Matcha Green Tea Cake', 
-    description: 'Delicate matcha-flavored cake with white chocolate accents',
-    variants: [{ id: 'variant10', price: '33.99' }],
-    images: [{ src: "https://images.unsplash.com/photo-1592151675528-1a0c09dde9e2?w=500&auto=format" }]
-  },
-  { 
-    id: 'gid://shopify/Product/11', 
-    title: 'Black Forest Gateau', 
-    description: 'Cherry-filled chocolate cake with whipped cream and kirsch',
-    variants: [{ id: 'variant11', price: '35.99' }],
-    images: [{ src: "https://images.unsplash.com/photo-1606890737304-57a1ca8a5b62?w=500&auto=format" }]
-  },
-  { 
-    id: 'gid://shopify/Product/12', 
-    title: 'Honey Lavender Cake', 
-    description: 'Aromatic lavender cake with honey buttercream and candied flowers',
-    variants: [{ id: 'variant12', price: '37.99' }],
-    images: [{ src: "https://images.unsplash.com/photo-1571115177098-24ec42ed204d?w=500&auto=format" }]
   }
 ];
 
 // Enhanced function to detect device capabilities
 const getDeviceCapabilities = (): { isMobile: boolean, shouldUseImages: boolean, dpr: [number, number] } => {
-  const [isMobile, setIsMobile] = useState(false);
+  if (typeof window === 'undefined') {
+    return { isMobile: false, shouldUseImages: false, dpr: [1, 2] };
+  }
   
-  // Check for mobile device
-  useEffect(() => {
-    const checkMobile = () => {
-      const mobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
-      setIsMobile(mobile);
-    };
-    
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+  // Check if mobile
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
   
-  // Return parameters optimized for the current device
-  // Always try to load 3D models, regardless of device
-  return {
-    isMobile,
-    shouldUseImages: false, // Never use fallback images
-    dpr: [1, 2] // Sensible DPR range for most devices
-  };
+  // Get hardware concurrency (CPU cores)
+  const cpuCores = window.navigator.hardwareConcurrency || 0;
+  
+  // Check for device memory (in GB)
+  const deviceMemory = (navigator as any).deviceMemory || 0;
+  
+  // Determine if we should use images instead of 3D models based on device capability
+  // Be EXTRA conservative with low-end devices ONLY
+  const shouldUseImages = false; // Force 3D models
+  
+  // Set appropriate device pixel ratio based on device capability
+  const dpr: [number, number] = isMobile ? [1, 1.5] : [1, 2];
+  
+  return { isMobile, shouldUseImages, dpr };
 };
 
 // Model loading fallback component
 function ModelLoadingFallback() {
-  // Don't show if the main loader is active
-  if (mainLoaderActive) return null;
+  // Get loader state
+  const loaderVisible = document.querySelector('[class*="fixed inset-0 z-"]');
+  
+  // Don't show if the main loader is active and visible
+  if (getMainLoaderActive() && loaderVisible) return null;
   
   return (
     <Html center>
       <div className="flex items-center justify-center">
-        <div className="text-sm text-blue-500 px-3 py-2 rounded-full" style={{ background: 'transparent' }}>
-          Loading model...
+        <div className="text-sm text-blue-500 bg-blue-50 px-3 py-2 rounded-full">
+          Loading cake model...
         </div>
       </div>
     </Html>
@@ -175,265 +113,266 @@ function ModelLoadingFallback() {
 }
 
 // Product card with 3D model
-function ProductCard({ product, index }: { product: any, index: number }) {
+function ProductCard({ 
+  product, 
+  forceVisible = true 
+}: { 
+  product: any, 
+  forceVisible?: boolean 
+}) {
   const { addToCart } = useShopContext();
-  const [isVisible, setIsVisible] = useState(true);
   const [modelError, setModelError] = useState(false);
   const [useFallbackImage, setUseFallbackImage] = useState(false);
   const { isMobile, shouldUseImages, dpr } = getDeviceCapabilities();
-  const [retryCount, setRetryCount] = useState(0);
-  const navigate = useNavigate();
-  const [isHovered, setIsHovered] = useState(false);
-  const [scaleValue] = useState(1.3);
-  const [containerScale, setContainerScale] = useState(1);
-  const [modelReady, setModelReady] = useState(false);
-  const cardRef = useRef<HTMLDivElement>(null);
+  
+  // Extract product ID from the Shopify handle
+  const productId = parseInt(product.id.split('/').pop() || '1', 10);
+  
+  // For performance on mobile, we might want to use images instead of 3D models
+  useEffect(() => {
+    // If we should use images based on device capability, set fallback image
+    if (shouldUseImages) {
+      setUseFallbackImage(true);
+    }
+  }, [shouldUseImages]);
+  
+  // Log model ID for debugging
+  useEffect(() => {
+    console.log(`Product "${product.title}" using 3D model ID: ${productId}`);
+  }, [product.title, productId]);
 
-  // Extract product ID from the Shopify handle or use a default ID
-  const productId = product.id ? parseInt(product.id.split('/').pop() || '1', 10) : 1;
-
-  console.log(`[HOME] ProductCard for ID ${productId}: isVisible=${isVisible}, useFallbackImage=${useFallbackImage}`);
-
-  // Handle model loading complete
-  const handleModelLoaded = useCallback(() => {
-    console.log(`[HOME] Model loaded successfully for product ${productId}`);
-    setModelReady(true);
-    setModelError(false);
-  }, [productId]);
-
-  // Handle 3D model error with retry mechanism
-  const handleModelError = useCallback((error: string) => {
-    console.log(`[HOME] Model error for product ${productId}: ${error}`);
+  // Simple error handler
+  const handleModelError = () => {
+    console.log(`Model error for product ${productId}`);
     setModelError(true);
-    
-    // Keep retrying without giving up
-    if (retryCount < 5) {
-      setTimeout(() => {
-        setModelError(false);
-        setRetryCount(prev => prev + 1);
-      }, 500 * (retryCount + 1));
-    }
-  }, [productId, retryCount]);
-
-  // Get appropriate fallback image URL (only for error placeholders)
-  const getFallbackImageUrl = () => {
-    if (product.featuredImage?.url) {
-      return product.featuredImage.url;
-    }
-    // For mock products
-    if (product.images?.[0]?.src) {
-      return product.images[0].src;
-    }
-    // Default/placeholder image
-    return 'https://storage.googleapis.com/kgbakerycakes/placeholder-cake.jpg';
+    setUseFallbackImage(true);
   };
 
-  // Navigate to product page when card is clicked
-  const goToProductPage = () => {
-    if (product) {
-      const handle = product.handle || `product-${productId}`;
-      navigate(`/product/${handle}`);
+  // Get fallback image URL with better error handling
+  const getFallbackImageUrl = () => {
+    if (product.images && product.images.length > 0) {
+      return product.images[0].src;
     }
+    // Use a local placeholder based on product ID
+    return `/images/cake-${(productId % 4) + 1}.jpg`;
   };
 
   return (
-    <div 
-      ref={cardRef}
-      onClick={goToProductPage} 
-      className="relative h-80 w-full cursor-pointer overflow-visible" 
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-    >
-      {useFallbackImage ? (
-        <img 
-          src={getFallbackImageUrl()} 
-          alt={product.title} 
-          className="w-full h-full object-contain transition-transform duration-500 ease-out"
-          style={{ transform: `scale(${isHovered ? 1.5 : 1})` }}
-        />
-      ) : (
-        <div 
-          className="w-full h-full relative model-placeholder"
-          data-product-id={productId} 
-          data-index={index}
-          style={{ transform: `scale(${isHovered ? 1.1 : 1})` }}
-        >
-          {/* This div will be used as a portal target for the shared canvas */}
-        </div>
-      )}
-
-      <div className="absolute bottom-0 left-0 w-full bg-white bg-opacity-80 p-2">
-        <h3 className="text-lg font-bold">{product.title}</h3>
-        <p className="text-sm text-gray-700">
-          ${parseFloat(product.variants[0].price).toFixed(2)}
-        </p>
+    <div className="backdrop-blur-sm overflow-hidden flex flex-col border border-gray-200/20 rounded-lg transition-all duration-300 hover:border-blue-300/30">
+      {/* 3D Model or Fallback Image */}
+      <div className="relative h-80 w-full">
+        {useFallbackImage ? (
+          // Fallback image for mobile or low-end devices
+          <div className="w-full h-full bg-gray-100">
+            <img 
+              src={getFallbackImageUrl()} 
+              alt={product.title}
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                // If the image fails to load, use a very simple colored div as fallback
+                const target = e.target as HTMLImageElement;
+                target.style.display = 'none';
+                target.parentElement!.style.backgroundColor = `hsl(${(productId * 30) % 360}, 70%, 80%)`;
+              }}
+            />
+          </div>
+        ) : (
+          // Always render Canvas for 3D models
+          <Canvas
+            camera={{ position: [0, 0, 4.0], fov: 30 }}
+            dpr={dpr}
+            className="!touch-none" /* Fix for mobile touch handling */
+            frameloop={isMobile ? "demand" : "always"} // Only render on demand for mobile
+            onCreated={({ gl }) => {
+              // Optimize WebGL context
+              gl.setClearColor(new THREE.Color('#f8f9fa'), 0);
+              if ('physicallyCorrectLights' in gl) {
+                (gl as any).physicallyCorrectLights = true;
+              }
+              // Reduce quality for mobile
+              if (isMobile) {
+                gl.shadowMap.enabled = false;
+                if ('powerPreference' in gl) {
+                  (gl as any).powerPreference = "low-power";
+                }
+              }
+              console.log(`Creating WebGL context for product ${productId}`);
+            }}
+            onError={handleModelError}
+          >
+            <ambientLight intensity={0.8} />
+            <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} intensity={1} castShadow={!isMobile} />
+            
+            <Suspense fallback={
+              <ModelLoadingFallback />
+            }>
+              {!modelError ? (
+                <>
+                  <Model3D 
+                    scale={1.3} 
+                    rotationSpeed={isMobile ? 0.003 : 0.005} 
+                    productId={productId} 
+                  />
+                  {!isMobile && <Environment preset="city" />}
+                </>
+              ) : (
+                <Html center>
+                  <div className="flex items-center justify-center">
+                    <div className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-full">
+                      Failed to load model
+                    </div>
+                  </div>
+                </Html>
+              )}
+            </Suspense>
+            
+            <OrbitControls
+              enableZoom={false}
+              maxPolarAngle={Math.PI / 2}
+              minPolarAngle={0}
+              rotateSpeed={0.5}
+              enableDamping={isMobile ? false : true}
+              dampingFactor={0.1}
+            />
+          </Canvas>
+        )}
+      </div>
+      
+      {/* Product Information */}
+      <div className="p-4 flex-grow">
+        <Link to={`/product/${product.id.split('/').pop()}`}>
+          <h3 className="text-lg font-semibold text-gray-800 hover:text-indigo-600">{product.title}</h3>
+        </Link>
+        <p className="text-green-600 font-medium mt-1">${product.variants[0].price}</p>
+        <p className="text-gray-600 text-sm mt-2 line-clamp-2">{product.description}</p>
       </div>
     </div>
   );
 }
 
-// Create a shared canvas component that will render all models
-function SharedModelCanvas({ products }: { products: any[] }) {
-  const { isMobile, dpr } = getDeviceCapabilities();
-  const [visibleModels, setVisibleModels] = useState<Record<string, boolean>>({});
-  const [activeModel, setActiveModel] = useState<number | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+// Simple Banh Mi 3D model component
+function BanhMi3D({ rotationSpeed = 0.005, index }: { rotationSpeed: number; index: number }) {
+  const groupRef = useRef<THREE.Group>(null);
   
-  // Setup intersection observer to detect which model containers are visible
-  useEffect(() => {
-    const containers = document.querySelectorAll('.model-placeholder');
-    
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach(entry => {
-          const productId = entry.target.getAttribute('data-product-id');
-          if (productId) {
-            setVisibleModels(prev => ({
-              ...prev,
-              [productId]: entry.isIntersecting
-            }));
-            
-            // If this model is coming into view and no active model, set it as active
-            if (entry.isIntersecting && activeModel === null) {
-              setActiveModel(parseInt(productId));
-            }
-          }
-        });
-      },
-      { threshold: 0.1 }
-    );
-
-    containers.forEach(container => {
-      observer.observe(container);
-    });
-    
-    return () => {
-      containers.forEach(container => {
-        observer.unobserve(container);
-      });
-    };
-  }, [products, activeModel]);
+  // Load the model (with explicit path)
+  const model = useGLTF("https://storage.googleapis.com/kgbakerycakes/banhmi.glb");
   
-  // Handle model hover to make it the active one
-  useEffect(() => {
-    const handleMouseEnter = (e: MouseEvent) => {
-      const target = e.currentTarget as HTMLElement;
-      const productId = target.getAttribute('data-product-id');
-      if (productId) {
-        setActiveModel(parseInt(productId));
-      }
-    };
-    
-    const containers = document.querySelectorAll('.model-placeholder');
-    containers.forEach(container => {
-      container.addEventListener('mouseenter', handleMouseEnter as EventListener);
-    });
-    
-    return () => {
-      containers.forEach(container => {
-        container.removeEventListener('mouseenter', handleMouseEnter as EventListener);
-      });
-    };
-  }, [products]);
-  
-  // Portal the canvas to the active model container
-  useEffect(() => {
-    if (activeModel !== null && canvasRef.current) {
-      // Find the container for the active model
-      const container = document.querySelector(`.model-placeholder[data-product-id="${activeModel}"]`);
-      if (container) {
-        // Move the canvas to this container
-        container.appendChild(canvasRef.current);
-      }
+  // Animate the model
+  useFrame(() => {
+    if (groupRef.current) {
+      // Rotate in different directions based on index
+      const direction = index % 2 === 0 ? 1 : -1;
+      groupRef.current.rotation.y += rotationSpeed * direction;
+      
+      // Add a gentle floating motion
+      const time = Date.now() * 0.001;
+      const offset = index * 0.5;
+      groupRef.current.position.y = Math.sin(time + offset) * 0.1;
     }
-  }, [activeModel, canvasRef]);
-
+  });
+  
+  // Return the model in a group for easier manipulation
   return (
-    <div style={{ position: 'fixed', top: '-9999px', left: '-9999px', visibility: 'hidden' }}>
-      <Canvas
-        ref={canvasRef}
-        camera={{ position: [0, 0, 4.0], fov: 30 }}
-        dpr={dpr}
-        className="!touch-none absolute inset-0 w-full h-full"
-        frameloop="always"
-        style={{ 
-          background: 'transparent',
-          position: 'absolute',
-          width: '100%',
-          height: '100%',
-          touchAction: 'none'
-        }}
-        onCreated={({ gl }) => {
-          console.log(`[HOME] Shared Canvas created`);
-          WebGLContextManager.addContext();
-          
-          gl.setClearColor(new THREE.Color('#f8f9fa'), 0);
-          
-          if ('physicallyCorrectLights' in gl) {
-            (gl as any).physicallyCorrectLights = true;
-          }
-          
-          if (isMobile) {
-            gl.shadowMap.enabled = false;
-            if ('powerPreference' in gl) {
-              (gl as any).powerPreference = "low-power";
-            }
-          } else {
-            gl.setPixelRatio(window.devicePixelRatio || 1);
-          }
-        }}
-      >
-        <ambientLight intensity={0.8} />
-        <pointLight position={[10, 10, 10]} intensity={1.0} />
-        <spotLight position={[-10, 10, 10]} angle={0.15} penumbra={1} intensity={1} castShadow={!isMobile} />
-        
-        {activeModel !== null && (
-          <Suspense fallback={<ModelLoadingFallback />}>
-            <>
-              <Model3D 
-                productId={activeModel} 
-                scale={1.3}
-                rotationSpeed={0.005}
-                isDetailView={false}
-              />
-              {!isMobile && <Environment preset="city" />}
-            </>
-          </Suspense>
-        )}
-        
-        <OrbitControls
-          enableZoom={false}
-          maxPolarAngle={Math.PI / 2}
-          minPolarAngle={0}
-          rotateSpeed={0.5}
-          enableDamping={!isMobile}
-          dampingFactor={0.1}
-        />
-      </Canvas>
-    </div>
+    <group ref={groupRef} scale={[1.5, 1.5, 1.5]}>
+      {model.scene ? <primitive object={model.scene} /> : null}
+    </group>
   );
 }
 
-// Define the keyframes as string constants
-const SPIN_RIGHT_KEYFRAMES = `
-@keyframes spin-right {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+// BanhMi marquee with inline 3D models between text items
+function BanhMiMarquee() {
+  const { isMobile } = getDeviceCapabilities();
+  
+  // Simplified BanhMi model component using react-three-fiber/drei
+  const BanhMiModel = ({ index = 0 }: { index?: number }) => {
+    const groupRef = useRef<THREE.Group>(null);
+    const { scene } = useGLTF('https://storage.googleapis.com/kgbakerycakes/banhmi.glb');
+    
+    // Rotate the model on each frame
+    useFrame(() => {
+      if (groupRef.current) {
+        // Alternate rotation direction based on index for visual variety
+        const direction = index % 2 === 0 ? 1 : -1;
+        groupRef.current.rotation.y += 0.01 * direction;
+      }
+    });
+    
+    // Return the model
+    return (
+      <group ref={groupRef} scale={[1.3, 1.3, 1.3]}>
+        {scene && <primitive object={scene} />}
+      </group>
+    );
+  };
+  
+  // Create a component for the 3D model display
+  const BanhMiCanvas = ({ index }: { index: number }) => (
+    <div className="h-16 w-16 inline-block">
+      <Canvas
+        camera={{ position: [0, 0, 5], fov: 40 }}
+        dpr={1}
+        gl={{ preserveDrawingBuffer: true, powerPreference: isMobile ? 'low-power' : 'default' }}
+        frameloop="always"
+      >
+        <ambientLight intensity={0.8} />
+        <directionalLight intensity={0.5} position={[1, 1, 1]} />
+        <Suspense fallback={null}>
+          <BanhMiModel index={index} />
+        </Suspense>
+      </Canvas>
+    </div>
+  );
+  
+  return (
+    <section className="w-screen h-16 bg-yellow-300 overflow-hidden -mx-[calc(50vw-50%)]">
+      {/* Single line marquee with integrated 3D models */}
+      <div className="relative w-full h-full overflow-hidden">
+        <div className="flex items-center animate-marquee whitespace-nowrap h-full">
+          {Array.from({ length: 10 }).map((_, index) => (
+            <div className="flex items-center" key={`banh-item-${index}`}>
+              <span className="text-2xl font-bold text-black mx-4">WE HAVE BANH MIS!</span>
+              <BanhMiCanvas index={index} />
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
 }
-`;
 
-const SPIN_LEFT_KEYFRAMES = `
-@keyframes spin-left {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(-360deg); }
-}
-`;
-
-// Add a component to inject the styles
+// Add animation styles
 function AnimationStyles() {
   useEffect(() => {
     const styleElement = document.createElement('style');
-    styleElement.textContent = SPIN_RIGHT_KEYFRAMES + SPIN_LEFT_KEYFRAMES;
+    styleElement.textContent = `
+      @keyframes marquee {
+        0% { transform: translateX(0); }
+        100% { transform: translateX(-50%); }
+      }
+      
+      @keyframes spin-slow {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+      
+      @keyframes spin-slow-reverse {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(-360deg); }
+      }
+      
+      .animate-marquee {
+        animation: marquee 25s linear infinite;
+        will-change: transform;
+      }
+      
+      .animate-spin-slow {
+        animation: spin-slow 8s linear infinite;
+      }
+      
+      .animate-spin-slow-reverse {
+        animation: spin-slow-reverse 8s linear infinite;
+      }
+    `;
     document.head.appendChild(styleElement);
     
     return () => {
@@ -444,71 +383,137 @@ function AnimationStyles() {
   return null;
 }
 
+// Main HomePage component
 export default function HomePage() {
   const { products, loading } = useShopContext();
   const [displayedProducts, setDisplayedProducts] = useState<any[]>([]);
   
+  // Set up displayed products
   useEffect(() => {
     // If there are Shopify products, use them; otherwise, use mock data
     if (!loading && products && products.length > 0) {
-      setDisplayedProducts(products);
-      console.log("Using Shopify products:", products.length);
+      // Add sequential IDs for consistent model mapping
+      const productsWithSequentialIds = products.map((product, index) => ({
+        ...product,
+        sequentialId: index + 1
+      }));
+      
+      setDisplayedProducts(productsWithSequentialIds);
+      console.log("Using Shopify products:", productsWithSequentialIds.length);
     } else if (!loading) {
-      setDisplayedProducts(mockProducts);
+      // Also add sequential IDs to mock products
+      const mockWithSequentialIds = mockProducts.map((product, index) => ({
+        ...product,
+        sequentialId: index + 1
+      }));
+      
+      setDisplayedProducts(mockWithSequentialIds);
       console.log("Using mock products since no Shopify products available");
     }
   }, [products, loading]);
   
+  // No need for viewport monitoring - all models always visible
+
+  // Add styles for animations
+  AnimationStyles();
+  
+  if (loading) {
+    return (
+      <div className="container mx-auto px-4 py-16 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      </div>
+    );
+  }
+
+  // Create a staggered entrance animation for elements
+  const ElementAnimation = ({ children, delay, direction = 'bottom' }: { 
+    children: ReactNode, 
+    delay: number,
+    direction?: 'left' | 'right' | 'bottom' | 'top'
+  }) => {
+    const [isVisible, setIsVisible] = useState(false);
+    
+    useEffect(() => {
+      const timer = setTimeout(() => {
+        setIsVisible(true);
+      }, delay);
+      
+      return () => clearTimeout(timer);
+    }, [delay]);
+    
+    // Calculate transform based on direction
+    const getInitialTransform = () => {
+      switch (direction) {
+        case 'left': return 'translateX(-50px)';
+        case 'right': return 'translateX(50px)';
+        case 'top': return 'translateY(-50px)';
+        case 'bottom': 
+        default: return 'translateY(50px)';
+      }
+    };
+    
+    const style = {
+      transform: isVisible ? 'translate(0)' : getInitialTransform(),
+      opacity: isVisible ? 1 : 0,
+      transition: 'all 0.5s ease-out'
+    };
+    
+    return <div style={style}>{children}</div>;
+  };
+
   return (
-    <div className="container mx-auto px-4 pb-12">
-      {/* Inject the animation styles */}
-      <AnimationStyles />
-      
-      {/* Shared Canvas for all models */}
-      {!loading && displayedProducts.length > 0 && (
-        <SharedModelCanvas products={displayedProducts} />
-      )}
-      
-      {/* Product Grid Section */}
-      <section className="py-12">
-        <div className="container mx-auto px-4">
-          {loading ? (
-            <div className="flex justify-center items-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {displayedProducts.map((product: any, index: number) => (
-                <div 
-                  key={product.id} 
-                  className="opacity-0" 
-                  style={{ 
-                    animation: `modelScaleIn 1.2s ease-out forwards`,
-                    animationDelay: `${0.1 + index * 0.15}s`
-                  }}
-                >
-                  <ProductCard product={product} index={index} />
-                </div>
-              ))}
-            </div>
-          )}
-          
-          {displayedProducts.length === 0 && !loading && (
+    <div className="overflow-x-hidden">
+      <div className="container mx-auto px-4 py-8">
+        {/* Featured Cake removed */}
+        
+        <ElementAnimation delay={100} direction="top">
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold text-gray-800 text-center">Our Collection</h1>
+            <p className="text-gray-600 mt-2 text-center">
+              Browse our premium custom cakes and bakery items
+            </p>
+          </div>
+        </ElementAnimation>
+        
+        {/* Products Grid with staggered animations */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {displayedProducts.slice(0, 6).map((product: any, index) => ( // Only show first 6 products
+            <ElementAnimation 
+              key={product.id} 
+              delay={150 + (index * 100)} 
+              direction={index % 2 === 0 ? 'left' : 'right'}
+            >
+              <ProductCard product={product} />
+            </ElementAnimation>
+          ))}
+        </div>
+        
+        {displayedProducts.length === 0 && (
+          <ElementAnimation delay={100} direction="bottom">
             <div className="text-center py-12">
-              <p className="text-gray-600">No products available at the moment.</p>
+              <h2 className="text-xl text-gray-600">No products available</h2>
+              <p className="text-gray-500 mt-2">
+                Please check back later or contact us for more information.
+              </p>
             </div>
-          )}
-          
-          <div className="text-center mt-12">
+          </ElementAnimation>
+        )}
+        
+        {/* View all products button */}
+        <ElementAnimation delay={600} direction="bottom">
+          <div className="text-center mt-12 mb-12">
             <Link 
               to="/shop" 
-              className="inline-block bg-button-gradient text-gray-800 font-medium px-6 py-3 rounded-md hover:opacity-90 transition shadow-sm"
+              className="inline-block bg-pink-500 text-white font-medium px-6 py-3 rounded-md hover:bg-pink-600 transition shadow-md"
             >
               View All Products
             </Link>
           </div>
-        </div>
-      </section>
+        </ElementAnimation>
+      </div>
+      
+      {/* Banh Mi Marquee - outside container for full width */}
+      <BanhMiMarquee />
     </div>
   );
 } 

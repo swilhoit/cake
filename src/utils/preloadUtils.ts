@@ -33,7 +33,8 @@ export const preloadImages = (srcs: string[]): Promise<void[]> => {
 };
 
 /**
- * Preloads a 3D model file (GLTF) using fetch
+ * Advanced preloading for 3D models using THREE.js GLTFLoader
+ * This not only caches the model but also processes it for faster rendering
  * @param modelPath Path to the model file
  */
 export const preloadModel = (modelPath: string): Promise<void> => {
@@ -42,18 +43,105 @@ export const preloadModel = (modelPath: string): Promise<void> => {
     return Promise.resolve();
   }
   
-  return fetch(modelPath)
-    .then(response => {
-      if (!response.ok) {
-        throw new Error(`Failed to preload model: ${modelPath}`);
-      }
-      preloadedAssets.add(modelPath);
-    })
-    .catch(error => {
-      console.warn('Error preloading model:', error);
-      // Continue even if we couldn't preload this model
-      return Promise.resolve();
+  console.log(`Preloading model: ${modelPath}`);
+  
+  // Use THREE.js for comprehensive preloading
+  return new Promise<void>((resolve) => {
+    // First make sure THREE.js is available
+    import('three/examples/jsm/loaders/GLTFLoader.js').then(({ GLTFLoader }) => {
+      const loader = new GLTFLoader();
+      
+      // Set up cache control headers
+      const fetchOptions = {
+        cache: 'force-cache' as RequestCache,
+        headers: {
+          'Cache-Control': 'max-age=31536000' // Cache for a year
+        }
+      };
+      
+      // Use THREE's built-in loading manager
+      const loadingManager = new THREE.LoadingManager();
+      loadingManager.onProgress = (url, loaded, total) => {
+        console.log(`Loading ${url}: ${Math.round(loaded / total * 100)}%`);
+      };
+      
+      loader.setPath('');
+      loader.manager = loadingManager;
+      
+      // Load the model
+      loader.load(
+        modelPath,
+        // Success callback - model loaded
+        (gltf) => {
+          console.log(`Successfully loaded model: ${modelPath}`);
+          
+          // Store in global cache for reuse
+          if (typeof window !== 'undefined') {
+            if (!window._modelCache) {
+              window._modelCache = {};
+            }
+            
+            // Store preprocessed model in cache
+            window._modelCache[modelPath] = gltf;
+            
+            // Prep model for memory management
+            gltf.scene.traverse((node) => {
+              if (node instanceof THREE.Mesh) {
+                // Mark geometry for easier disposal later
+                if (node.geometry) {
+                  node.geometry.userData.cached = true;
+                }
+                
+                // Prep materials for reuse
+                if (node.material) {
+                  if (Array.isArray(node.material)) {
+                    node.material.forEach(material => {
+                      material.userData.cached = true;
+                    });
+                  } else {
+                    node.material.userData.cached = true;
+                  }
+                }
+              }
+            });
+            
+            // Mark as preloaded
+            preloadedAssets.add(modelPath);
+            resolve();
+          }
+        },
+        // Progress callback
+        (xhr) => {
+          const progress = xhr.loaded / xhr.total;
+          if (progress < 1) {
+            console.log(`${modelPath} ${Math.round(progress * 100)}% loaded`);
+          }
+        },
+        // Error callback
+        (error) => {
+          console.warn(`Error preloading model: ${modelPath}`, error);
+          
+          // Try a simple fetch as fallback
+          fetch(modelPath, fetchOptions)
+            .then(response => {
+              if (!response.ok) {
+                throw new Error(`Failed to fetch model: ${response.statusText}`);
+              }
+              console.log(`Basic fetch for model successful: ${modelPath}`);
+              preloadedAssets.add(modelPath);
+              resolve();
+            })
+            .catch(() => {
+              console.error(`All attempts to preload ${modelPath} failed`);
+              resolve(); // Still resolve to continue loading
+            });
+        }
+      );
+    }).catch(error => {
+      console.error("Error importing GLTFLoader:", error);
+      resolve(); // Resolve anyway to continue preloading flow
     });
+  });
 };
 
 /**
@@ -65,57 +153,89 @@ export const preloadModels = (modelPaths: string[]): Promise<void[]> => {
 };
 
 /**
- * Generates an array of cake model paths based on product IDs
- * @param productIds Array of product IDs
+ * Returns fixed array of cake model paths that are known to work
  * @returns Array of model paths
  */
-export const getCakeModelPaths = (productIds: (string | number)[]): string[] => {
-  return productIds.map(id => {
-    let modelId = String(id);
-    if (modelId.includes('product-')) {
-      modelId = modelId.replace('product-', '');
-    }
-    // Assuming the model path format
-    return `/models/cake${modelId}.gltf`;
-  });
+export const getCakeModelPaths = (): string[] => {
+  // These are the exact URIs that we'll use in the app
+  return [
+    'https://storage.googleapis.com/kgbakerycakes/optimized/strawberry.glb',
+    'https://storage.googleapis.com/kgbakerycakes/optimized/nemo.glb',
+    'https://storage.googleapis.com/kgbakerycakes/optimized/princess.glb',
+    'https://storage.googleapis.com/kgbakerycakes/optimized/turkey.glb',
+    'https://storage.googleapis.com/kgbakerycakes/optimized/spongebob1.glb',
+    'https://storage.googleapis.com/kgbakerycakes/banhmi.glb'  // Also preload the banh mi model
+  ];
 };
 
 /**
- * Preloads critical assets for the site
+ * Preloads critical assets for the site using a more reliable sequential approach
  * @param options Configuration options
  */
 export const preloadCriticalAssets = async (
   options: {
     imageUrls?: string[];
-    productIds?: (string | number)[];
     onProgress?: (progress: number) => void;
   } = {}
 ): Promise<void> => {
-  const { imageUrls = [], productIds = [], onProgress } = options;
+  const { imageUrls = [], onProgress } = options;
   
-  // Calculate total assets to preload
-  const modelPaths = getCakeModelPaths(productIds);
+  // Always get all model paths
+  const modelPaths = getCakeModelPaths();
   const totalAssets = imageUrls.length + modelPaths.length;
   let loadedAssets = 0;
   
+  console.log(`Preloading ${totalAssets} assets (${imageUrls.length} images, ${modelPaths.length} models)`);
+  
+  // Define a function to update progress
   const updateProgress = () => {
     loadedAssets++;
+    const percentage = Math.round((loadedAssets / totalAssets) * 100);
     if (onProgress) {
-      onProgress((loadedAssets / totalAssets) * 100);
+      onProgress(percentage);
     }
+    console.log(`Preload progress: ${percentage}% (${loadedAssets}/${totalAssets})`);
   };
   
-  // Start preloading images
-  imageUrls.forEach(url => {
-    preloadImage(url)
-      .then(updateProgress)
-      .catch(() => updateProgress()); // Count as loaded even on error
-  });
-  
-  // Start preloading models
-  modelPaths.forEach(path => {
-    preloadModel(path)
-      .then(updateProgress)
-      .catch(() => updateProgress()); // Count as loaded even on error
-  });
+  try {
+    // First, preload all essential 3D models (wait for them to complete)
+    console.log("Starting model preloading...");
+    const modelPromises = modelPaths.map(path => {
+      return preloadModel(path)
+        .then(() => {
+          updateProgress();
+        })
+        .catch(error => {
+          console.warn(`Error preloading model ${path}:`, error);
+          updateProgress(); // Count as loaded even on error
+        });
+    });
+    
+    // Wait for all models to finish loading before proceeding
+    await Promise.all(modelPromises);
+    console.log("Finished preloading models");
+    
+    // Then preload images (these are less critical)
+    console.log("Starting image preloading...");
+    const imagePromises = imageUrls.map(url => {
+      return preloadImage(url)
+        .then(() => {
+          updateProgress();
+        })
+        .catch(error => {
+          console.warn(`Error preloading image ${url}:`, error);
+          updateProgress(); // Count as loaded even on error
+        });
+    });
+    
+    await Promise.all(imagePromises);
+    console.log("Finished preloading images");
+    
+  } catch (error) {
+    console.error("Error during preloading:", error);
+    // Make sure we report completion even if there was an error
+    if (onProgress) {
+      onProgress(100);
+    }
+  }
 }; 
