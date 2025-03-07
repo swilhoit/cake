@@ -361,8 +361,37 @@ export default function HomePage() {
 
 // Smaller Banh Mi model optimized for the marquee
 function BanhMiModelSmall({ rotateRight }: { rotateRight: boolean }) {
-  // Always use the fallback box to prevent WebGL context issues
-  // This is a more reliable approach for the marquee section
+  // Instead of always using a fallback box, attempt to load the model
+  const [modelLoaded, setModelLoaded] = useState(false);
+  const [modelError, setModelError] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+  
+  // Handle model error with retry
+  const handleModelError = useCallback(() => {
+    console.error("BanhMi model failed to load");
+    setModelError(true);
+    
+    // Implement retry logic with short delays
+    if (retryCount < 3) {
+      const delay = 500 * (retryCount + 1);
+      console.log(`Retrying BanhMi model in ${delay}ms (attempt ${retryCount + 1}/3)`);
+      
+      setTimeout(() => {
+        console.log(`Retrying BanhMi model now (attempt ${retryCount + 1}/3)`);
+        setModelError(false);
+        setRetryCount(prev => prev + 1);
+      }, delay);
+    }
+  }, [retryCount]);
+  
+  // Reset error state when mount
+  useEffect(() => {
+    setModelError(false);
+    setRetryCount(0);
+  }, []);
+  
+  // Model URL - always use Google Cloud Storage
+  const modelUrl = "https://storage.googleapis.com/kgbakerycakes/cake_model_1.glb";
   
   // Memoize the Canvas component to prevent unnecessary re-renders
   return useMemo(() => (
@@ -400,12 +429,19 @@ function BanhMiModelSmall({ rotateRight }: { rotateRight: boolean }) {
         color="#ffffff"
       />
       
-      {/* Always use the fallback box to prevent WebGL context issues */}
       <Suspense fallback={null}>
-        <FallbackBanhMi rotateRight={rotateRight} />
+        {!modelError ? (
+          <RotatingModel 
+            url={modelUrl} 
+            rotateRight={rotateRight} 
+            onLoadFailed={handleModelError} 
+          />
+        ) : (
+          <FallbackBanhMi rotateRight={rotateRight} />
+        )}
       </Suspense>
     </Canvas>
-  ), [rotateRight]);
+  ), [rotateRight, modelError, handleModelError, modelUrl]);
 }
 
 // Fallback model for production where CORS prevents loading external models
@@ -554,18 +590,9 @@ function RotatingModel({ url, rotateRight, onLoadFailed }: {
     return clonedScene;
   }, [scene, colorValue, modelLoaded]);
   
-  // Render fallback box if no model
+  // If no model is available yet, show nothing (loading state)
   if (!model) {
-    return (
-      <mesh
-        ref={meshRef}
-        scale={[1.0, 0.6, 0.3]}
-        position={[0, -0.2, 0]}
-      >
-        <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial color={colorValue} />
-      </mesh>
-    );
+    return null;
   }
   
   // Render the actual model

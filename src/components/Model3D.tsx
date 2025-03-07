@@ -55,6 +55,7 @@ export default function Model3D({
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [retryCount, setRetryCount] = useState(0);
   
   // Extract number from productId (if it exists)
   let idNumber = '1';
@@ -80,6 +81,35 @@ export default function Model3D({
   };
   
   const bgColor = colorMap[idNumber] || '#f3d2c1';
+
+  // Reset error state when productId changes to allow fresh attempts
+  useEffect(() => {
+    setHasError(false);
+    setErrorMessage("");
+    setRetryCount(0);
+    setIsLoading(true);
+  }, [productId]);
+  
+  // Handle model error with retry logic
+  const handleModelError = useCallback((msg: string) => {
+    console.error(`Model error: ${msg}`);
+    setHasError(true);
+    setErrorMessage(msg);
+    setIsLoading(false);
+    
+    // Implement retry logic with increasing delays
+    if (retryCount < 3) {
+      const delay = 500 * (retryCount + 1);
+      console.log(`Retrying model load in ${delay}ms (attempt ${retryCount + 1}/3)`);
+      
+      setTimeout(() => {
+        console.log(`Retrying model load now (attempt ${retryCount + 1}/3)`);
+        setHasError(false);
+        setIsLoading(true);
+        setRetryCount(prev => prev + 1);
+      }, delay);
+    }
+  }, [retryCount]);
   
   return (
     <Suspense fallback={<ModelLoader />}>
@@ -93,11 +123,7 @@ export default function Model3D({
         bgColor={bgColor}
         isDetailView={isDetailView}
         onLoad={() => setIsLoading(false)} 
-        onError={(msg: string) => {
-          setIsLoading(false);
-          setHasError(true);
-          setErrorMessage(msg);
-        }}
+        onError={handleModelError}
       />
     </Suspense>
   );
@@ -125,7 +151,6 @@ function Model({
 }) {
   const meshRef = useRef<THREE.Mesh>(null);
   const [modelLoaded, setModelLoaded] = useState(false);
-  const [showFallback, setShowFallback] = useState(false);
   
   // Limit the model number to 1-8 (available models)
   const idNum = parseInt(idNumber);
@@ -138,9 +163,6 @@ function Model({
     console.log(`Loading model from: ${path}`);
     return path;
   }, [modelNum]);
-  
-  // Track whether we're using the fallback model
-  const [usingFallback, setUsingFallback] = useState(false);
   
   // Calculate variant-specific transformations based on ID
   const variantProps = useMemo(() => ({
@@ -165,69 +187,32 @@ function Model({
     variantName: getCakeVariantName(idNum)
   }), [idNum]);
   
-  // Fallback box for when model fails to load - this is a memoized component to prevent re-renders
-  const FallbackBox = useMemo(() => {
-    return (
-      <>
-        <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial color={bgColor} />
-      </>
-    );
-  }, [bgColor]);
-  
-  // Create error handling function that's stable between renders  
-  const handleError = useCallback((error: any) => {
-    console.error(`Failed to load model from ${modelPath}:`, error);
-    
-    // If we're already showing the fallback, no need to try again
-    if (showFallback) return;
-    
-    // Try a different model if first one fails
-    if (!usingFallback) {
-      console.log('Trying fallback model: cake_model_1.glb');
-      setUsingFallback(true);
-      return;
-    }
-    
-    // If fallback also failed, show the simple box
-    console.error('All fallback attempts failed, showing fallback box');
-    setShowFallback(true);
-    onError(`Could not load cake model: ${error && typeof error === 'object' ? String(error) : 'Unknown error'}`);
-  }, [modelPath, usingFallback, showFallback, onError]);
-
-  // Create success handling function that's stable between renders
-  const handleLoad = useCallback(() => {
-    setModelLoaded(true);
-    onLoad();
-  }, [onLoad]);
-  
   // Load model with error handling
-  const modelUrl = usingFallback ? 'https://storage.googleapis.com/kgbakerycakes/cake_model_1.glb' : modelPath;
-  
   // Use a try-catch block around useGLTF to handle exceptions
   let scene: THREE.Group | undefined;
   try {
-    const result = useGLTF(modelUrl, undefined, undefined, (error) => {
+    const result = useGLTF(modelPath, undefined, undefined, (error) => {
       console.error('GLTF loader error:', error);
-      handleError(error);
+      onError(`Failed to load model: ${error}`);
     });
     scene = result.scene;
   } catch (error) {
     console.error('Error in useGLTF hook:', error);
-    handleError(error);
+    onError(`Exception in model loader: ${error}`);
   }
   
   // Update error handler to watch for changes to scene
   useEffect(() => {
-    if (!scene && !showFallback) {
-      handleError("Scene failed to load");
+    if (!scene) {
+      onError("Scene failed to load");
     }
-  }, [scene, handleError, showFallback]);
+  }, [scene, onError]);
   
   // Clone the model when it loads successfully
   const model = useMemo(() => {
     try {
       if (!scene) {
+        onError("No scene available");
         return new THREE.Group();
       }
       
@@ -237,18 +222,19 @@ function Model({
       // Set the model as loaded after a short delay to ensure everything is ready
       setTimeout(() => {
         if (clonedScene.children.length > 0) {
-          handleLoad();
+          setModelLoaded(true);
+          onLoad();
         } else {
-          handleError("Model loaded but contains no objects");
+          onError("Model loaded but contains no objects");
         }
       }, 100);
       
       return clonedScene;
     } catch (error) {
-      handleError(error);
+      onError(`Error cloning scene: ${error}`);
       return new THREE.Group();
     }
-  }, [scene, handleLoad, handleError]);
+  }, [scene, onLoad, onError]);
   
   // Apply color tint to the model based on productId
   useEffect(() => {
@@ -303,7 +289,7 @@ function Model({
     }
   });
 
-  // Show the actual model if it loaded correctly, otherwise show error or fallback
+  // Always attempt to render the actual model
   return (
     <mesh 
       ref={meshRef}
@@ -315,13 +301,7 @@ function Model({
       position={[0, isDetailView ? variantProps.detailPositionY : variantProps.positionY, 0]}
       rotation={[variantProps.tiltX, 0, variantProps.tiltZ]}
     >
-      {/* If model failed to load but didn't throw an error, show a fallback box */}
-      {showFallback || !model || model.children.length === 0 ? (
-        FallbackBox
-      ) : (
-        // Otherwise show the loaded model
-        <primitive object={model} />
-      )}
+      <primitive object={model} />
     </mesh>
   );
 }

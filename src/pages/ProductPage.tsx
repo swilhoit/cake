@@ -133,27 +133,12 @@ export default function ProductPage() {
     console.log(`Model error in ProductPage, retry: ${retryCount}`);
     setModelError(true);
     
-    // Always fall back to image in production to ensure a good user experience
-    if (window.location.hostname.includes('vercel.app')) {
-      console.log('Production environment detected - falling back to image');
-      setUseFallbackImage(true);
-      return;
-    }
-    
-    // Try up to 2 times to reload the model with increasing delays
-    if (retryCount < 2) {
-      const retryDelay = (retryCount + 1) * 1000; // 1s, then 2s
-      
-      console.log(`Retrying 3D model load in ${retryDelay}ms`);
-      setTimeout(() => {
-        setModelError(false);
-        setRetryCount(prev => prev + 1);
-      }, retryDelay);
-    } else {
-      // After retries, fall back to image
-      console.log('Max retries reached - falling back to image');
-      setUseFallbackImage(true);
-    }
+    // Instead of falling back to images, we'll retry loading the model
+    console.log(`Retrying 3D model load in ${(retryCount + 1) * 500}ms`);
+    setTimeout(() => {
+      setModelError(false);
+      setRetryCount(prev => prev + 1);
+    }, (retryCount + 1) * 500); // Shorter retry times: 500ms, 1000ms, etc.
   };
 
   useEffect(() => {
@@ -362,102 +347,82 @@ export default function ProductPage() {
   return (
     <div className="container mx-auto px-4 py-16">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-        {/* Product Image/3D Model */}
+        {/* Product Image/3D Model - ALWAYS use 3D model */}
         <div>
           <div className="rounded-lg overflow-hidden h-[800px] relative">
-            {useFallbackImage ? (
-              <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-                <img 
-                  src={selectedImage || getProductImages()[0]} 
-                  alt={product?.title} 
-                  className="w-full h-auto object-contain"  
-                />
-              </div>
-            ) : (
-              <Canvas
-                camera={{ position: [0, 0, 4.2], fov: 35 }}
-                dpr={dpr}
-                gl={{ 
-                  antialias: true,
-                  alpha: true,
-                  preserveDrawingBuffer: true,
-                  powerPreference: 'default',
-                  depth: true
-                }}
-                style={{ 
-                  background: 'transparent',
-                  width: '100%', 
-                  height: '100%',
-                  borderRadius: '0.5rem',
-                  outline: 'none'
-                }}
-                onCreated={({ gl }) => {
-                  // Set clear color with full transparency
-                  gl.setClearColor(0x000000, 0);
-                }}
-                onError={() => {
-                  console.error('Canvas error occurred');
-                  handleModelError();
-                }}
-              >
-                <ambientLight intensity={1.0} />
-                <spotLight 
-                  position={[10, 10, 10]} 
-                  angle={0.15} 
-                  penumbra={1} 
-                  intensity={1.5}
-                  castShadow 
-                />
-                <spotLight 
-                  position={[-10, 5, -10]} 
-                  angle={0.3} 
-                  penumbra={1} 
-                  intensity={1.2}
-                  color="#fff9e0"  
-                  castShadow={false} 
-                />
-                <directionalLight
-                  position={[0, 5, 5]}
-                  intensity={1.0}
-                  color="#ffffff"
-                />
-                
-                <Suspense fallback={<ModelLoading />}>
-                  {!modelError ? (
-                    <>
-                      <Model3D 
-                        scale={2.5}
-                        rotationSpeed={0.003} 
-                        productId={productId}
-                        isDetailView={true}
-                      />
-                      <Environment preset="city" />
-                    </>
-                  ) : (
-                    <FallbackProduct />
-                  )}
-                </Suspense>
-                
-                <OrbitControls 
-                  autoRotate={false}
-                  enableZoom={true}
-                  maxZoom={2.5}
-                  minZoom={0.6}
-                  maxPolarAngle={Math.PI / 1.5}
-                  minPolarAngle={0}
-                />
-              </Canvas>
-            )}
-          </div>
-          
-          {/* Toggle between 3D and Image */}
-          <div className="mt-4 flex justify-center">
-            <button 
-              onClick={() => setUseFallbackImage(!useFallbackImage)}
-              className="px-4 py-2 bg-gray-200 rounded-md text-gray-800 hover:bg-gray-300 transition"
+            <Canvas
+              camera={{ position: [0, 0, 4.2], fov: 35 }}
+              dpr={dpr}
+              gl={{ 
+                antialias: true,
+                alpha: true,
+                preserveDrawingBuffer: true,
+                powerPreference: 'default',
+                depth: true
+              }}
+              style={{ 
+                background: 'transparent',
+                width: '100%', 
+                height: '100%',
+                borderRadius: '0.5rem',
+                outline: 'none'
+              }}
+              onCreated={({ gl }) => {
+                // Set clear color with full transparency
+                gl.setClearColor(0x000000, 0);
+              }}
+              onError={() => {
+                console.error('Canvas error occurred');
+                handleModelError();
+              }}
             >
-              {useFallbackImage ? "View 3D Model" : "View Product Image"}
-            </button>
+              <ambientLight intensity={1.0} />
+              <spotLight 
+                position={[10, 10, 10]} 
+                angle={0.15} 
+                penumbra={1} 
+                intensity={1.5}
+                castShadow 
+              />
+              <spotLight 
+                position={[-10, 5, -10]} 
+                angle={0.3} 
+                penumbra={1} 
+                intensity={1.2}
+                color="#fff9e0"  
+                castShadow={false} 
+              />
+              <directionalLight
+                position={[0, 5, 5]}
+                intensity={1.0}
+                color="#ffffff"
+              />
+              
+              <Suspense fallback={<ModelLoading />}>
+                {!modelError ? (
+                  <>
+                    <Model3D 
+                      scale={2.5}
+                      rotationSpeed={0.003} 
+                      productId={productId}
+                      isDetailView={true}
+                    />
+                    <Environment preset="city" />
+                  </>
+                ) : (
+                  <FallbackProduct />
+                )}
+              </Suspense>
+              
+              <OrbitControls 
+                autoRotate={false}
+                enableZoom={true}
+                maxZoom={2.5}
+                minZoom={0.6}
+                maxPolarAngle={Math.PI / 1.5}
+                minPolarAngle={0}
+              />
+            </Canvas>
           </div>
         </div>
         
