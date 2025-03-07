@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect, Suspense, useCallback } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { useGLTF } from '@react-three/drei';
+import { useLoader } from '@react-three/fiber';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
@@ -20,6 +20,13 @@ const createDracoLoader = () => {
 
 // Shared DRACO loader to prevent duplicate instances
 const globalDracoLoader = createDracoLoader();
+
+// Global GLTFLoader with DRACO support
+const createGLTFLoader = () => {
+  const loader = new GLTFLoader();
+  loader.setDRACOLoader(globalDracoLoader);
+  return loader;
+};
 
 // Loading indicator component without text
 function ModelLoader() {
@@ -100,17 +107,6 @@ export default function Model3D({
     setIsLoading(false);
   }, []);
 
-  // Preload configuration - do this once globally
-  useEffect(() => {
-    // Configure the loader for all future useGLTF calls
-    const gltfLoader = new GLTFLoader();
-    gltfLoader.setDRACOLoader(globalDracoLoader);
-    
-    return () => {
-      // Don't dispose global loader on unmount of individual components
-    };
-  }, []);
-
   // Return the 3D model content directly (no Canvas)
   return (
     <Suspense fallback={<ModelLoader />}>
@@ -157,62 +153,43 @@ function ModelContent({
   // Reference to the group containing our model
   const groupRef = useRef<THREE.Group>(null);
   
-  // State to track if model is loaded
-  const [modelLoaded, setModelLoaded] = useState(false);
-  const [modelError, setModelError] = useState<string | null>(null);
+  // State to track if model is loaded and store the model
   const [model, setModel] = useState<THREE.Group | null>(null);
+  const [modelError, setModelError] = useState<string | null>(null);
   
-  // Preload model
-  useEffect(() => {
-    // Preload the model first
-    useGLTF.preload(modelUrl);
-    
-    // Cleanup
-    return () => {
-      try {
-        useGLTF.clear(modelUrl);
-      } catch (e) {
-        // Ignore cleanup errors
-        console.log("Error clearing model:", e);
-      }
-    };
-  }, [modelUrl]);
-  
-  // Actually load the model with proper async handling
+  // Load the model with regular THREE.js GLTFLoader
   useEffect(() => {
     let isMounted = true;
+    const loader = createGLTFLoader();
     
-    async function loadModel() {
-      try {
-        // Load the model
-        const result = await useGLTF(modelUrl);
-        
-        // Only update state if component is still mounted
+    console.log(`Loading model from URL: ${modelUrl}`);
+    
+    loader.load(
+      modelUrl,
+      (gltf) => {
         if (isMounted) {
-          if (result && result.scene) {
-            setModel(result.scene.clone()); // Clone to avoid shared model issues
-            setModelLoaded(true);
-            onLoad();
-            console.log(`Model successfully loaded: ${variantName}`);
-          } else {
-            const errorMsg = 'Model loaded but scene is missing';
-            setModelError(errorMsg);
-            onError(errorMsg);
-          }
+          // Successfully loaded the model
+          console.log(`Successfully loaded model: ${variantName}`);
+          setModel(gltf.scene.clone());
+          onLoad();
         }
-      } catch (error) {
+      },
+      (progress) => {
+        if (progress.lengthComputable) {
+          const percent = Math.round((progress.loaded / progress.total) * 100);
+          console.log(`Loading ${modelUrl}: ${percent}%`);
+        }
+      },
+      (error: any) => {
         if (isMounted) {
-          const errorMsg = error instanceof Error ? error.message : String(error);
+          const errorMsg = error.message || String(error);
           console.error(`Error loading model: ${errorMsg}`);
           setModelError(errorMsg);
           onError(`Failed to load model: ${errorMsg}`);
         }
       }
-    }
+    );
     
-    loadModel();
-    
-    // Cleanup function
     return () => {
       isMounted = false;
     };
@@ -231,7 +208,7 @@ function ModelContent({
   }
   
   // Show loading state
-  if (!modelLoaded || !model) {
+  if (!model) {
     return <ModelLoader />;
   }
   
