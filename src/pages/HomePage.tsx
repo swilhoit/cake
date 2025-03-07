@@ -329,13 +329,13 @@ export default function HomePage() {
         <div className="container mx-auto px-8">
           <div className="flex flex-col md:flex-row items-center justify-between">
             <div className="md:w-1/2 mb-12 md:mb-0 text-center md:text-left">
-              <h2 className="text-6xl font-black text-black mb-8">We have Banh Mis!</h2>
-              <p className="text-2xl font-bold text-black mb-10">
+              <h2 className="text-6xl font-black text-black mb-8 font-playfair">We have Banh Mis!</h2>
+              <p className="text-2xl font-bold text-black mb-10 font-rubik">
                 Try our delicious, freshly made Vietnamese sandwiches with a variety of fillings.
               </p>
               <Link 
                 to="/shop" 
-                className="inline-block bg-black hover:bg-gray-800 text-yellow-400 font-bold px-10 py-5 rounded-xl transition shadow-lg text-xl"
+                className="inline-block bg-black hover:bg-gray-800 text-yellow-400 font-bold px-10 py-5 rounded-xl transition shadow-lg text-xl font-rubik"
               >
                 Order Now
               </Link>

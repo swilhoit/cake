@@ -6,6 +6,10 @@ export default {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        'playfair': ['"Playfair Display"', 'serif'],
+        'rubik': ['Rubik', 'sans-serif'],
+      },
       animation: {
         'gradient': 'gradient 15s ease infinite',
       },
