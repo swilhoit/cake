@@ -132,16 +132,14 @@ function Model({
   
   // Handle local models for development to avoid CORS issues
   const idNum = parseInt(idNumber);
-  const modelNum = (!isNaN(idNum) && idNum > 0 && idNum <= 10) ? idNum : 1;
+  // Limit the model number to 1-8 (available models)
+  const modelNum = (!isNaN(idNum) && idNum > 0) ? ((idNum - 1) % 8) + 1 : 1;
   
-  // In development environment, use a local model file to avoid CORS issues
-  const isDevelopment = process.env.NODE_ENV === 'development';
-  // To avoid too many re-renders, we set the model path once and don't change it
+  // Set the model path to use the numbered models (1-8)
   const modelPath = useMemo(() => {
-    return isDevelopment
-      ? `/models/model.glb` // Use local placeholder model
-      : `https://storage.googleapis.com/kgbakerycakes/cake_model_${modelNum}.glb`;
-  }, [isDevelopment, modelNum]);
+    // Always use the numbered model, but cycle through 1-8 for higher IDs
+    return `https://storage.googleapis.com/kgbakerycakes/cake_model_${modelNum}.glb`;
+  }, [modelNum]);
   
   // Calculate variant-specific transformations based on ID
   const variantProps = useMemo(() => ({
@@ -159,8 +157,8 @@ function Model({
     tiltX: (idNum % 4 - 2) * 0.1,
     tiltZ: (idNum % 5 - 2) * 0.1,
     
-    // For detail view, different position adjustment
-    detailPositionY: -1 + (idNum % 3 - 1) * 0.3,
+    // For detail view, different position adjustment (moving up by adjusting Y position)
+    detailPositionY: -0.7 + (idNum % 3 - 1) * 0.3, // Changed from -1 to -0.7 to move it up
     
     // Custom variation title
     variantName: getCakeVariantName(idNum)
@@ -291,20 +289,6 @@ function Model({
       ) : (
         // Otherwise show the loaded model
         <primitive object={model} />
-      )}
-      
-      {/* If in detail view, add product information */}
-      {isDetailView && modelLoaded && (
-        <Html
-          position={[0, 1.5, 0]}
-          center
-          className="pointer-events-none"
-          style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}
-        >
-          <div className="bg-white/90 backdrop-blur-sm rounded-lg px-3 py-1 text-xs text-gray-700 shadow-md">
-            {variantProps.variantName}
-          </div>
-        </Html>
       )}
     </mesh>
   );

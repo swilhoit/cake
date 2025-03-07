@@ -363,7 +363,7 @@ export default function ProductPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
         {/* Product Image/3D Model */}
         <div>
-          <div className="rounded-lg overflow-hidden h-96 relative bg-gray-50">
+          <div className="rounded-lg overflow-hidden h-96 relative">
             {useFallbackImage ? (
               <div className="bg-white rounded-lg shadow-lg overflow-hidden">
                 <img 
@@ -391,12 +391,11 @@ export default function ProductPage() {
                   outline: 'none'
                 }}
                 onCreated={({ gl }) => {
-                  // Set clear color with transparency
-                  gl.setClearColor(0xffffff, 0);
+                  // Set clear color with full transparency
+                  gl.setClearColor(0x000000, 0);
                 }}
                 onError={() => handleModelError()}
               >
-                <color attach="background" args={["#ffffff00"]} />
                 <ambientLight intensity={0.8} />
                 <spotLight 
                   position={[10, 10, 10]} 
@@ -410,7 +409,7 @@ export default function ProductPage() {
                   {!modelError ? (
                     <>
                       <Model3D 
-                        scale={1.8} 
+                        scale={1.98}
                         rotationSpeed={0.003} 
                         productId={id}
                         isDetailView={true}

@@ -63,6 +63,34 @@ export const mockProducts = [
     description: 'Coconut cake with coconut cream and toasted coconut flakes',
     variants: [{ id: 'variant8', price: '31.99' }],
     images: [] 
+  },
+  { 
+    id: 'gid://shopify/Product/9', 
+    title: 'Tiramisu Delight', 
+    description: 'Coffee-soaked layers with mascarpone cream and cocoa dusting',
+    variants: [{ id: 'variant9', price: '36.99' }],
+    images: [] 
+  },
+  { 
+    id: 'gid://shopify/Product/10', 
+    title: 'Matcha Green Tea Cake', 
+    description: 'Delicate matcha-flavored cake with white chocolate accents',
+    variants: [{ id: 'variant10', price: '33.99' }],
+    images: [] 
+  },
+  { 
+    id: 'gid://shopify/Product/11', 
+    title: 'Black Forest Gateau', 
+    description: 'Cherry-filled chocolate cake with whipped cream and kirsch',
+    variants: [{ id: 'variant11', price: '35.99' }],
+    images: [] 
+  },
+  { 
+    id: 'gid://shopify/Product/12', 
+    title: 'Honey Lavender Cake', 
+    description: 'Aromatic lavender cake with honey buttercream and candied flowers',
+    variants: [{ id: 'variant12', price: '37.99' }],
+    images: [] 
   }
 ];
 
@@ -171,110 +199,79 @@ function ProductCard({ product }: { product: any }) {
   };
 
   return (
-    <div className="backdrop-blur-sm overflow-hidden flex flex-col border border-gray-200/20 rounded-lg transition-all duration-300 hover:border-blue-300/30">
-      {/* 3D Model or Fallback Image */}
-      <div className="relative h-80 w-full">
-        {useFallbackImage ? (
-          // Fallback image for mobile or low-end devices
-          <div className="w-full h-full bg-gray-100">
+    <Link to={`/product/${product.id.split('/').pop()}`} className="block">
+      <div className="transition-all duration-300">
+        {/* 3D Model Container - No background, no borders, no shadows */}
+        <div className="relative h-80 w-full">
+          {useFallbackImage ? (
             <img 
               src={getFallbackImageUrl()} 
-              alt={product.title}
-              className="w-full h-full object-cover"
-              onError={(e) => {
-                // If the image fails to load, use a very simple colored div as fallback
-                const target = e.target as HTMLImageElement;
-                target.style.display = 'none';
-                target.parentElement!.style.backgroundColor = `hsl(${(productId * 30) % 360}, 70%, 80%)`;
-              }}
+              alt={product.title} 
+              className="w-full h-full object-contain"  
             />
-          </div>
-        ) : isVisible && (
-          <Canvas
-            camera={{ position: [0, 0, 4.0], fov: 30 }}
-            dpr={dpr} // Dynamic resolution based on device capability
-            className="!touch-none" /* Fix for mobile touch handling */
-            frameloop={isMobile ? "demand" : "always"} // Only render on demand for mobile
-            onCreated={({ gl }) => {
-              // Optimize WebGL context
-              gl.setClearColor(new THREE.Color('#f8f9fa'), 0);
-              if ('physicallyCorrectLights' in gl) {
-                (gl as any).physicallyCorrectLights = true;
-              }
-              // Reduce quality for mobile
-              if (isMobile) {
-                gl.shadowMap.enabled = false;
-                if ('powerPreference' in gl) {
-                  (gl as any).powerPreference = "low-power";
-                }
-              }
-            }}
-            onError={handleModelError}
-          >
-            <ambientLight intensity={0.8} />
-            <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} intensity={1} castShadow={!isMobile} />
-            
-            <Suspense fallback={
-              <Html center>
-                <div className="flex items-center justify-center">
-                  <div className="text-sm text-blue-500 bg-blue-50 px-3 py-2 rounded-full">
-                    Loading cake model...
-                  </div>
-                </div>
-              </Html>
-            }>
-              {!modelError ? (
-                <>
-                  <Model3D 
-                    scale={1.3} 
-                    rotationSpeed={isMobile ? 0.003 : 0.005} 
-                    productId={productId} 
-                    onError={handleModelError}
-                  />
-                  {!isMobile && <Environment preset="city" />}
-                </>
-              ) : (
+          ) : isVisible && (
+            <Canvas
+              camera={{ position: [0, 0, 4.0], fov: 30 }}
+              dpr={dpr}
+              gl={{ 
+                antialias: true,
+                alpha: true,
+                preserveDrawingBuffer: true,
+                powerPreference: 'default',
+                depth: true
+              }}
+              className="!touch-none" /* Fix for mobile touch handling */
+              style={{ background: 'transparent' }}
+              onCreated={({ gl }) => {
+                // Set clear color with full transparency
+                gl.setClearColor(0x000000, 0);
+              }}
+            >
+              <ambientLight intensity={0.8} />
+              <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} intensity={1} castShadow />
+              
+              <Suspense fallback={
                 <Html center>
                   <div className="flex items-center justify-center">
-                    <div className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-full">
-                      Failed to load model
+                    <div className="text-sm text-blue-500 px-3 py-2 rounded-full" style={{ background: 'transparent' }}>
+                      Loading cake model...
                     </div>
                   </div>
                 </Html>
-              )}
-            </Suspense>
-            
-            <OrbitControls
-              enableZoom={false}
-              maxPolarAngle={Math.PI / 2}
-              minPolarAngle={0}
-              rotateSpeed={0.5}
-              enableDamping={isMobile ? false : true}
-              dampingFactor={0.1}
-            />
-          </Canvas>
-        )}
+              }>
+                {!modelError ? (
+                  <>
+                    <Model3D 
+                      scale={1.3} 
+                      rotationSpeed={isMobile ? 0.003 : 0.005} 
+                      productId={productId} 
+                    />
+                    {!isMobile && <Environment preset="city" />}
+                  </>
+                ) : (
+                  <Html center>
+                    <div className="flex items-center justify-center">
+                      <div className="text-sm text-red-500 px-3 py-2 rounded-full" style={{ background: 'transparent' }}>
+                        Failed to load model
+                      </div>
+                    </div>
+                  </Html>
+                )}
+              </Suspense>
+              
+              <OrbitControls
+                enableZoom={false}
+                maxPolarAngle={Math.PI / 2}
+                minPolarAngle={0}
+                rotateSpeed={0.5}
+                enableDamping={isMobile ? false : true}
+                dampingFactor={0.1}
+              />
+            </Canvas>
+          )}
+        </div>
       </div>
-      
-      {/* Product Information */}
-      <div className="p-4 flex-grow">
-        <Link to={`/product/${product.id.split('/').pop()}`}>
-          <h3 className="text-lg font-semibold text-gray-800 hover:text-indigo-600">{product.title}</h3>
-        </Link>
-        <p className="text-green-600 font-medium mt-1">${product.variants[0].price}</p>
-        <p className="text-gray-600 text-sm mt-2 line-clamp-2">{product.description}</p>
-      </div>
-      
-      {/* Add to Cart Button */}
-      <div className="px-4 pb-4">
-        <button 
-          className="w-full bg-button-gradient hover:opacity-90 text-gray-800 font-medium py-2 rounded-md transition shadow-sm"
-          onClick={handleAddToCart}
-        >
-          Add to Cart
-        </button>
-      </div>
-    </div>
+    </Link>
   );
 }
 
@@ -298,13 +295,6 @@ export default function HomePage() {
       {/* Product Grid Section */}
       <section className="py-12">
         <div className="container mx-auto px-4">
-          <div className="text-center mb-10">
-            <h2 className="text-3xl font-bold text-gray-800">Our Collection</h2>
-            <p className="text-gray-600 mt-2">
-              Explore our beautifully crafted custom cakes
-            </p>
-          </div>
-          
           {loading ? (
             <div className="flex justify-center items-center py-12">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
