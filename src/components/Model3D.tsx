@@ -3,41 +3,38 @@ import { useFrame } from '@react-three/fiber';
 import { useGLTF, Html } from '@react-three/drei';
 import * as THREE from 'three';
 
-// Loading indicator component that matches site style
+// Loading indicator component without text
 function ModelLoader() {
   return (
     <Html center>
-      <div className="flex flex-col items-center justify-center p-4 rounded-lg bg-white shadow-lg">
-        <div className="flex items-center">
+      <div className="flex flex-col items-center justify-center p-4 rounded-lg bg-white/70 backdrop-blur-sm shadow-lg">
+        <div className="flex items-center justify-center">
           <img 
             src="/KG_Logo.gif" 
-            alt="KG Bakery" 
-            className="h-12 w-auto object-contain"
+            alt="Loading" 
+            className="h-16 w-auto object-contain"
           />
-          <span className="ml-3 text-xl font-bold text-gray-800">KG Bakery</span>
         </div>
         <div className="flex space-x-2 mt-3">
           <div className="w-2 h-2 rounded-full bg-pink-600 animate-bounce" style={{ animationDelay: '0ms' }}></div>
           <div className="w-2 h-2 rounded-full bg-pink-600 animate-bounce" style={{ animationDelay: '150ms' }}></div>
           <div className="w-2 h-2 rounded-full bg-pink-600 animate-bounce" style={{ animationDelay: '300ms' }}></div>
         </div>
-        <p className="text-gray-700 text-sm mt-2">Loading cake...</p>
       </div>
     </Html>
   );
 }
 
-// Error display component
+// Error display component without text
 function ModelError({ message }: { message: string }) {
   return (
     <Html center>
-      <div className="flex flex-col items-center justify-center p-4 rounded-lg bg-white shadow-lg">
-        <div className="text-pink-500 mb-2">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <div className="flex flex-col items-center justify-center p-4 rounded-lg bg-white/70 backdrop-blur-sm shadow-lg">
+        <div className="text-pink-500">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
           </svg>
         </div>
-        <p className="text-gray-700 text-sm text-center">{message}</p>
       </div>
     </Html>
   );
