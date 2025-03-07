@@ -374,8 +374,24 @@ function BanhMiModelSmall({ rotateRight }: { rotateRight: boolean }) {
         gl.setClearColor(0x000000, 0);
       }}
     >
-      <ambientLight intensity={0.8} />
-      <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} intensity={1} castShadow />
+      {/* Improved lighting setup */}
+      <ambientLight intensity={0.6} /> {/* Reduced ambient light intensity for better contrast */}
+      <spotLight 
+        position={[5, 10, 5]} 
+        angle={0.4} 
+        penumbra={1} 
+        intensity={1.5} 
+        castShadow 
+        color="#fff9e0" // Warm light color
+      />
+      <spotLight 
+        position={[-5, 5, -5]} 
+        angle={0.3} 
+        penumbra={1} 
+        intensity={0.8} 
+        castShadow={false} 
+        color="#ffe0c0" // Secondary fill light with warm color
+      />
       
       {/* Using a separate component for the rotating model */}
       <RotatingModel url={modelUrl} rotateRight={rotateRight} />
@@ -391,18 +407,57 @@ function RotatingModel({ url, rotateRight }: { url: string, rotateRight: boolean
   const { scene } = useGLTF(url);
   
   // Auto-rotation animation with specified direction
-  useFrame(() => {
+  useFrame((state) => {
     if (meshRef.current) {
       // Rotate either clockwise or counter-clockwise based on the prop
       meshRef.current.rotation.y += rotateRight ? 0.03 : -0.03;
+      
+      // Add a slight floating motion for visual interest
+      const time = state.clock.getElapsedTime();
+      meshRef.current.position.y = -0.2 + Math.sin(time * 0.8) * 0.05;
     }
   });
+  
+  // Get a random color for visual differentiation
+  const color = useMemo(() => {
+    // Generate a random warm color for each Banh Mi to make them look distinct
+    const hue = 20 + Math.random() * 30; // Range from orange-red to yellow-orange
+    const saturation = 80 + Math.random() * 20; // High saturation
+    const lightness = 55 + Math.random() * 15; // Medium-high lightness
+    return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+  }, []);
   
   // Clone the model to avoid conflicts
   const model = useMemo(() => {
     if (!scene) return new THREE.Group();
-    return scene.clone();
-  }, [scene]);
+    const clonedScene = scene.clone();
+    
+    // Apply random color tint to make each model look unique
+    clonedScene.traverse((child) => {
+      if (child instanceof THREE.Mesh && child.material) {
+        if (Array.isArray(child.material)) {
+          child.material = child.material.map(mat => {
+            const newMat = mat.clone();
+            // Apply a subtle tint
+            if (newMat.color) {
+              const threeColor = new THREE.Color(color);
+              newMat.color.lerp(threeColor, 0.3);
+            }
+            return newMat;
+          });
+        } else {
+          const newMat = child.material.clone();
+          if (newMat.color) {
+            const threeColor = new THREE.Color(color);
+            newMat.color.lerp(threeColor, 0.3);
+          }
+          child.material = newMat;
+        }
+      }
+    });
+    
+    return clonedScene;
+  }, [scene, color]);
   
   // Log model status
   useEffect(() => {

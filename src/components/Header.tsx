@@ -17,25 +17,25 @@ export default function Header() {
                 alt="KG Bakery" 
                 className="h-12 w-auto object-contain"
               />
-              <span className="ml-3 text-xl font-bold text-gray-800">KG Bakery</span>
+              <span className="ml-3 text-xl font-bold text-gray-800 font-playfair">KG Bakery</span>
             </Link>
           </div>
           
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-8">
-            <Link to="/" className="text-gray-700 hover:text-indigo-600 relative group transition-colors duration-300">
+            <Link to="/" className="text-gray-700 hover:text-indigo-600 relative group transition-colors duration-300 font-bold font-rubik">
               Home
               <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-indigo-600 transition-all duration-300 group-hover:w-full"></span>
             </Link>
-            <Link to="/shop" className="text-gray-700 hover:text-indigo-600 relative group transition-colors duration-300">
+            <Link to="/shop" className="text-gray-700 hover:text-indigo-600 relative group transition-colors duration-300 font-bold font-rubik">
               Shop
               <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-indigo-600 transition-all duration-300 group-hover:w-full"></span>
             </Link>
-            <Link to="/about" className="text-gray-700 hover:text-indigo-600 relative group transition-colors duration-300">
+            <Link to="/about" className="text-gray-700 hover:text-indigo-600 relative group transition-colors duration-300 font-bold font-rubik">
               About
               <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-indigo-600 transition-all duration-300 group-hover:w-full"></span>
             </Link>
-            <Link to="/contact" className="text-gray-700 hover:text-indigo-600 relative group transition-colors duration-300">
+            <Link to="/contact" className="text-gray-700 hover:text-indigo-600 relative group transition-colors duration-300 font-bold font-rubik">
               Contact
               <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-indigo-600 transition-all duration-300 group-hover:w-full"></span>
             </Link>
@@ -78,28 +78,28 @@ export default function Header() {
             <nav className="flex flex-col space-y-3">
               <Link 
                 to="/"
-                className="text-gray-700 hover:text-indigo-600 transition-all duration-200 py-2 px-3 rounded hover:bg-gray-50 hover:pl-5"
+                className="text-gray-700 hover:text-indigo-600 transition-all duration-200 py-2 px-3 rounded hover:bg-gray-50 hover:pl-5 font-bold font-rubik"
                 onClick={() => setIsMenuOpen(false)}
               >
                 Home
               </Link>
               <Link 
                 to="/shop"
-                className="text-gray-700 hover:text-indigo-600 transition-all duration-200 py-2 px-3 rounded hover:bg-gray-50 hover:pl-5"
+                className="text-gray-700 hover:text-indigo-600 transition-all duration-200 py-2 px-3 rounded hover:bg-gray-50 hover:pl-5 font-bold font-rubik"
                 onClick={() => setIsMenuOpen(false)}
               >
                 Shop
               </Link>
               <Link 
                 to="/about"
-                className="text-gray-700 hover:text-indigo-600 transition-all duration-200 py-2 px-3 rounded hover:bg-gray-50 hover:pl-5"
+                className="text-gray-700 hover:text-indigo-600 transition-all duration-200 py-2 px-3 rounded hover:bg-gray-50 hover:pl-5 font-bold font-rubik"
                 onClick={() => setIsMenuOpen(false)}
               >
                 About
               </Link>
               <Link 
                 to="/contact"
-                className="text-gray-700 hover:text-indigo-600 transition-all duration-200 py-2 px-3 rounded hover:bg-gray-50 hover:pl-5"
+                className="text-gray-700 hover:text-indigo-600 transition-all duration-200 py-2 px-3 rounded hover:bg-gray-50 hover:pl-5 font-bold font-rubik"
                 onClick={() => setIsMenuOpen(false)}
               >
                 Contact
