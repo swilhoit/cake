@@ -11,21 +11,6 @@ const LoadingScreen: React.FC = () => {
   const [isExiting, setIsExiting] = useState(false);
   const [progressComplete, setProgressComplete] = useState(false);
   
-  // Update global variable when loading state changes
-  useEffect(() => {
-    mainLoaderActive = isLoading;
-    return () => {
-      mainLoaderActive = false;
-    };
-  }, [isLoading]);
-  
-  // Check if progress is complete and trigger green flash
-  useEffect(() => {
-    if (progress >= 100) {
-      setProgressComplete(true);
-    }
-  }, [progress]);
-  
   const loadingTips = [
     "Did you know? Our 3D cake models are rendered in real-time.",
     "Each cake is handcrafted with love and attention to detail.",
@@ -37,6 +22,56 @@ const LoadingScreen: React.FC = () => {
     "Check out our monthly special flavors in the shop!"
   ];
   
+  // Force exit if progress is 100% and loading is stuck
+  useEffect(() => {
+    if (progress >= 100) {
+      setProgressComplete(true);
+      
+      // Force exit after 2 seconds if loading state is stuck
+      const forceExitTimer = setTimeout(() => {
+        if (isLoading) {
+          console.log("Forcing loader exit after 100% completion");
+          setIsExiting(true);
+          
+          const hideTimer = setTimeout(() => {
+            setShowLoader(false);
+            mainLoaderActive = false;
+          }, 800);
+          
+          return () => clearTimeout(hideTimer);
+        }
+      }, 2000);
+      
+      return () => clearTimeout(forceExitTimer);
+    }
+  }, [progress, isLoading]);
+  
+  // Update global variable when loading state changes
+  useEffect(() => {
+    mainLoaderActive = isLoading;
+    return () => {
+      mainLoaderActive = false;
+    };
+  }, [isLoading]);
+  
+  // Handle hiding the loader with animation
+  useEffect(() => {
+    if (!isLoading && !isExiting) {
+      console.log("Starting exit animation for loader");
+      // Start exit animation
+      setIsExiting(true);
+      
+      // Set a timeout to allow the exit animation to complete
+      const timer = setTimeout(() => {
+        setShowLoader(false);
+      }, 800); // Match animation duration
+      return () => clearTimeout(timer);
+    } else if (isLoading && !progressComplete) {
+      setIsExiting(false);
+      setShowLoader(true);
+    }
+  }, [isLoading, isExiting, progressComplete]);
+  
   // Rotate through tips every 3 seconds while loading
   useEffect(() => {
     if (!isLoading) return;
@@ -47,23 +82,6 @@ const LoadingScreen: React.FC = () => {
     
     return () => clearInterval(interval);
   }, [isLoading, loadingTips.length]);
-  
-  // Handle hiding the loader with animation
-  useEffect(() => {
-    if (!isLoading && !isExiting) {
-      // Start exit animation
-      setIsExiting(true);
-      
-      // Set a timeout to allow the exit animation to complete
-      const timer = setTimeout(() => {
-        setShowLoader(false);
-      }, 800); // Match animation duration
-      return () => clearTimeout(timer);
-    } else if (isLoading) {
-      setIsExiting(false);
-      setShowLoader(true);
-    }
-  }, [isLoading, isExiting]);
   
   // Don't render anything if not showing
   if (!showLoader) return null;
@@ -93,7 +111,9 @@ const LoadingScreen: React.FC = () => {
         </div>
         
         <h1 className="text-3xl font-bold mb-2 text-pink-600">KG Bakery</h1>
-        <p className="text-gray-600 mb-2">Preparing your cake experience...</p>
+        <p className="text-gray-600 mb-2">
+          {progressComplete ? "Ready to explore our delicious cakes!" : "Preparing your cake experience..."}
+        </p>
         
         <div className="h-12 flex items-center justify-center mb-4">
           <p className="text-sm text-gray-500 italic">{loadingTips[currentTip]}</p>
@@ -108,6 +128,19 @@ const LoadingScreen: React.FC = () => {
         </div>
         
         <p className="text-sm text-gray-500">{Math.round(progress)}% loaded</p>
+        
+        {progressComplete && (
+          <button 
+            onClick={() => {
+              setIsExiting(true);
+              setTimeout(() => setShowLoader(false), 800);
+              mainLoaderActive = false;
+            }}
+            className="mt-4 px-6 py-2 bg-green-500 text-white rounded-full hover:bg-green-600 transition-colors"
+          >
+            Enter Site
+          </button>
+        )}
       </div>
     </div>
   );
