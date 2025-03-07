@@ -44,14 +44,23 @@ function ModelError({ message }: { message: string }) {
   );
 }
 
-// Add this helper function after the imports - better version for Google Cloud Storage
+// Modify the modelPreloader function to handle preloading more reliably
 function modelPreloader() {
   // Enable THREE cache mechanism
   THREE.Cache.enabled = true;
   
+  // Keep track of loaded models
+  const loadedModels = new Map();
+  
   return {
     preload: (url: string) => {
       return new Promise((resolve, reject) => {
+        // Check if we've already loaded this model
+        if (loadedModels.has(url)) {
+          resolve(loadedModels.get(url));
+          return;
+        }
+        
         // For Google Cloud Storage specifically
         const textureLoader = new THREE.FileLoader();
         textureLoader.setResponseType('arraybuffer'); // Important for binary files like GLB
@@ -59,7 +68,8 @@ function modelPreloader() {
         textureLoader.setWithCredentials(false); // Changed to false for Google Cloud Storage
         textureLoader.setPath(''); // Make sure no path prefix is added
         textureLoader.setRequestHeader({
-          'Access-Control-Allow-Origin': '*' // Request header for CORS
+          'Access-Control-Allow-Origin': '*', // Request header for CORS
+          'Cache-Control': 'no-cache' // Prevent caching
         });
         
         console.log(`Preloading model: ${url}`);
@@ -67,6 +77,7 @@ function modelPreloader() {
           url,
           (blob) => {
             console.log(`Successfully preloaded model: ${url}`);
+            loadedModels.set(url, blob); // Store for future use
             resolve(blob);
           },
           (progress) => {
@@ -82,6 +93,14 @@ function modelPreloader() {
           }
         );
       });
+    },
+    // Add a method to fetch cached models
+    getPreloadedModel: (url: string) => {
+      return loadedModels.get(url);
+    },
+    // Add a method to check if a model is preloaded
+    isPreloaded: (url: string) => {
+      return loadedModels.has(url);
     }
   };
 }
@@ -178,7 +197,7 @@ export default function Model3D({
   );
 }
 
-// The actual model component that will be wrapped in Suspense
+// Modify the Model function to handle the async loading properly
 function Model({ 
   scale, 
   rotationSpeed, 
@@ -200,6 +219,7 @@ function Model({
 }) {
   const meshRef = useRef<THREE.Mesh>(null);
   const [modelLoaded, setModelLoaded] = useState(false);
+  const [isPreloaded, setIsPreloaded] = useState(false);
   
   // Limit the model number to 1-8 (available models)
   const idNum = parseInt(idNumber);
@@ -220,11 +240,11 @@ function Model({
     const modelIndex = (idNum - 1) % characterModels.length;
     const modelFile = characterModels[modelIndex];
     
-    // Explicit Google Cloud Storage URL with cache buster to avoid browser caching issues
-    const cacheBuster = new Date().getTime();
-    const path = `https://storage.googleapis.com/kgbakerycakes/optimized/${modelFile}?cb=${cacheBuster}`;
+    // Explicit Google Cloud Storage URL
+    // Using static URLs without cache busters for better caching
+    const path = `https://storage.googleapis.com/kgbakerycakes/optimized/${modelFile}`;
     
-    console.log(`Loading character model from: ${path}`);
+    console.log(`Model path for product ${idNum}: ${path}`);
     return path;
   }, [idNum]);
   
@@ -232,10 +252,22 @@ function Model({
   useEffect(() => {
     let isMounted = true;
     
+    // First check if the model is already preloaded
+    if (preloader.isPreloaded(modelPath)) {
+      console.log(`Model already preloaded: ${modelPath}`);
+      setIsPreloaded(true);
+      return;
+    }
+    
+    console.log(`Starting preload for: ${modelPath}`);
+    
     // Attempt to preload the model file
     preloader.preload(modelPath)
       .then(() => {
-        console.log(`Successfully preloaded: ${modelPath}`);
+        if (isMounted) {
+          console.log(`Preload complete: ${modelPath}`);
+          setIsPreloaded(true);
+        }
       })
       .catch(error => {
         console.error(`Failed to preload model: ${modelPath}`, error);
@@ -276,34 +308,45 @@ function Model({
   const gltfOptions = {
     draco: undefined,
     meshoptDecoder: undefined,
-    useDraco: false,
-    useFloatVertexType: true,
     crossOrigin: 'anonymous'
   };
+  
+  // Wait for preload to complete before attempting to use useGLTF
+  // This is the key fix for the home page issue
+  const useModelLoader = isPreloaded;
   
   // Load model with enhanced error handling
   // Use a try-catch block around useGLTF to handle exceptions
   let scene: THREE.Group | undefined;
   try {
-    // Use correct loader options
-    const result = useGLTF(modelPath, gltfOptions.draco, gltfOptions.meshoptDecoder, (error) => {
-      console.error('GLTF loader error:', error);
-      onError(`Failed to load model: ${error}`);
-    });
+    // Only load the model if it's been preloaded first
+    const result = useModelLoader ? 
+      useGLTF(modelPath, gltfOptions.draco, gltfOptions.meshoptDecoder) : 
+      { scene: undefined };
+      
     scene = result.scene;
   } catch (error) {
     console.error('Error in useGLTF hook:', error);
     onError(`Exception in model loader: ${error}`);
   }
   
+  // Monitor for successful model loading
+  useEffect(() => {
+    if (scene) {
+      console.log(`Model loaded successfully: ${modelPath}`);
+      setModelLoaded(true);
+      onLoad();
+    }
+  }, [scene, modelPath, onLoad]);
+  
   // Create a fallback model if the scene couldn't be loaded
   useEffect(() => {
-    if (!scene) {
+    if (isPreloaded && !scene) {
       // Keep trying - no fallback - log error only
       console.error("Scene failed to load - continuing to retry");
     }
-  }, [scene]);
-  
+  }, [scene, isPreloaded]);
+
   // Clone the model when it loads successfully
   const model = useMemo(() => {
     try {
@@ -314,22 +357,12 @@ function Model({
       // Clone the scene to avoid conflicts when instances are unmounted
       const clonedScene = scene.clone();
       
-      // Set the model as loaded after a short delay to ensure everything is ready
-      setTimeout(() => {
-        if (clonedScene.children.length > 0) {
-          setModelLoaded(true);
-          onLoad();
-        } else {
-          onError("Model loaded but contains no objects");
-        }
-      }, 100);
-      
       return clonedScene;
     } catch (error) {
       onError(`Error cloning scene: ${error}`);
       return new THREE.Group();
     }
-  }, [scene, onLoad, onError]);
+  }, [scene, onError]);
   
   // Apply color tint to the model based on productId
   useEffect(() => {

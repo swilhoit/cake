@@ -188,7 +188,9 @@ function ProductCard({ product }: { product: any }) {
   const [containerScale, setContainerScale] = useState(1);
   const [rotationSpeed, setRotationSpeed] = useState(isMobile ? 0.003 : 0.005);
   const [inViewport, setInViewport] = useState(false);
+  const [modelReady, setModelReady] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // Extract product ID from the Shopify handle or use a default ID
   const productId = product.id ? parseInt(product.id.split('/').pop() || '1', 10) : 1;
@@ -218,41 +220,48 @@ function ProductCard({ product }: { product: any }) {
     };
   }, []);
 
-  // For 3D model loading - always try to load models
+  // For 3D model loading - always try to load models with a staggered delay
   useEffect(() => {
-    // Override shouldUseImages to always try 3D models
+    // Only load if in viewport and WebGL context is available
+    if (!inViewport) return;
+    
     if (!WebGLContextManager.canCreateContext()) {
       console.warn("Cannot create WebGL context for product", productId);
       return;
     }
     
-    // Only show the model if in viewport and after a delay
-    if (inViewport) {
-      const delay = isMobile ? 200 : 50;
-      
-      const timer = setTimeout(() => {
-        setIsVisible(true);
-      }, delay);
-      
-      return () => clearTimeout(timer);
-    } else {
-      setIsVisible(false);
-    }
-  }, [isMobile, inViewport, productId]);
+    // Stagger the loading based on product ID
+    // This prevents all models from loading simultaneously
+    const staggerDelay = Math.min(200, productId * 50);
+    const timer = setTimeout(() => {
+      console.log(`Showing model for product ${productId} after stagger delay`);
+      setIsVisible(true);
+    }, staggerDelay);
+    
+    return () => clearTimeout(timer);
+  }, [inViewport, productId]);
 
   // Clean up when component unmounts or is not in viewport
   useEffect(() => {
     return () => {
       if (!inViewport && isVisible) {
+        console.log(`Hiding model for product ${productId} - no longer in viewport`);
         setIsVisible(false);
       }
     };
-  }, [inViewport, isVisible]);
+  }, [inViewport, isVisible, productId]);
+
+  // Handle model loading complete
+  const handleModelLoaded = useCallback(() => {
+    console.log(`Model loaded successfully for product ${productId}`);
+    setModelReady(true);
+    setModelError(false);
+  }, [productId]);
 
   // Smooth transition for scale and rotation values using useSpring-like approach
   useEffect(() => {
     // Only run animations if actually in viewport
-    if (!inViewport) return;
+    if (!inViewport || !modelReady) return;
     
     let frameId: number;
     const targetScale = isHovered ? 2.0 : 1.3;
@@ -288,7 +297,7 @@ function ProductCard({ product }: { product: any }) {
     frameId = requestAnimationFrame(animate);
     
     return () => cancelAnimationFrame(frameId);
-  }, [isHovered, isMobile, inViewport]);
+  }, [isHovered, isMobile, inViewport, modelReady]);
 
   // Handle 3D model error with retry mechanism
   const handleModelError = () => {
@@ -296,7 +305,7 @@ function ProductCard({ product }: { product: any }) {
     setModelError(true);
     
     // Keep retrying without giving up
-    if (retryCount < 5) {
+    if (retryCount < 3) {
       setTimeout(() => {
         setModelError(false);
         setRetryCount(prev => prev + 1);
@@ -351,6 +360,7 @@ function ProductCard({ product }: { product: any }) {
         />
       ) : inViewport && isVisible && (
         <Canvas
+          ref={canvasRef}
           camera={{ position: [0, 0, 4.0], fov: 30 }}
           dpr={dpr}
           gl={{ 
@@ -371,6 +381,7 @@ function ProductCard({ product }: { product: any }) {
             transform: `scale(${containerScale})`
           }}
           onCreated={({ gl }) => {
+            console.log(`Canvas created for product ${productId}`);
             WebGLContextManager.addContext();
             gl.setPixelRatio(window.devicePixelRatio || 1);
             gl.setSize(gl.domElement.clientWidth, gl.domElement.clientHeight);
@@ -379,7 +390,9 @@ function ProductCard({ product }: { product: any }) {
           <CanvasContent 
             productId={productId} 
             scaleValue={scaleValue} 
-            rotationSpeed={rotationSpeed} 
+            rotationSpeed={rotationSpeed}
+            onModelLoaded={handleModelLoaded}
+            onModelError={handleModelError}
           />
         </Canvas>
       )}
@@ -399,18 +412,35 @@ function ProductCard({ product }: { product: any }) {
 function CanvasContent({ 
   productId, 
   scaleValue, 
-  rotationSpeed 
+  rotationSpeed,
+  onModelLoaded,
+  onModelError
 }: { 
   productId: number, 
   scaleValue: number, 
-  rotationSpeed: number 
+  rotationSpeed: number,
+  onModelLoaded: () => void,
+  onModelError: (error: string) => void
 }) {
   // Clean up WebGL context on unmount
   useEffect(() => {
     return () => {
       WebGLContextManager.removeContext();
+      console.log(`Canvas unmounted for product ${productId}`);
     };
-  }, []);
+  }, [productId]);
+
+  // Handle model loading errors
+  const handleError = (error: string) => {
+    console.error(`Error in model ${productId}: ${error}`);
+    onModelError(error);
+  };
+
+  // Handle successful model loads
+  const handleLoad = () => {
+    console.log(`Model ${productId} loaded successfully`);
+    onModelLoaded();
+  };
 
   return (
     <>
@@ -423,6 +453,7 @@ function CanvasContent({
           productId={productId} 
           scale={scaleValue}
           rotationSpeed={rotationSpeed}
+          isDetailView={false}
         />
       </Suspense>
     </>
