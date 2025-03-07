@@ -8,12 +8,12 @@ import Model3D from '../components/Model3D';
 import * as THREE from 'three';
 import { mockProducts } from '../pages/HomePage';
 
-// Mock gallery images for when the real product doesn't have images
+// Mock gallery images for when the real product doesn't have images (using CDN images)
 const mockImages = [
-  '/cake-gallery-1.jpg',
-  '/cake-gallery-2.jpg',
-  '/cake-gallery-3.jpg',
-  '/cake-gallery-4.jpg',
+  "https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=500&auto=format", // Chocolate cake
+  "https://images.unsplash.com/photo-1621303837174-89787a7d4729?w=500&auto=format", // Birthday cake
+  "https://images.unsplash.com/photo-1562777717-dc6984f65a63?w=500&auto=format", // Strawberry cake
+  "https://images.unsplash.com/photo-1586985289688-ca3cf47d3e6e?w=500&auto=format"  // Fancy cake
 ];
 
 // Enhanced function to detect device capabilities

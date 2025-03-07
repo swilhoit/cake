@@ -14,84 +14,84 @@ export const mockProducts = [
     title: 'Premium Chocolate Cake', 
     description: 'Rich chocolate cake with ganache frosting',
     variants: [{ id: 'variant1', price: '29.99' }],
-    images: [] 
+    images: [{ src: "https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=500&auto=format" }]
   },
   { 
     id: 'gid://shopify/Product/2', 
     title: 'Vanilla Birthday Cake', 
     description: 'Classic vanilla cake with buttercream frosting',
     variants: [{ id: 'variant2', price: '24.99' }],
-    images: [] 
+    images: [{ src: "https://images.unsplash.com/photo-1621303837174-89787a7d4729?w=500&auto=format" }]
   },
   { 
     id: 'gid://shopify/Product/3', 
     title: 'Red Velvet Deluxe', 
     description: 'Elegant red velvet cake with cream cheese frosting',
     variants: [{ id: 'variant3', price: '34.99' }],
-    images: [] 
+    images: [{ src: "https://images.unsplash.com/photo-1562777717-dc6984f65a63?w=500&auto=format" }]
   },
   { 
     id: 'gid://shopify/Product/4', 
-    title: 'Strawberry Dream', 
-    description: 'Light strawberry cake with fresh berries',
-    variants: [{ id: 'variant4', price: '32.99' }],
-    images: [] 
+    title: 'Strawberry Shortcake', 
+    description: 'Light sponge cake with fresh strawberries and whipped cream',
+    variants: [{ id: 'variant4', price: '27.99' }],
+    images: [{ src: "https://images.unsplash.com/photo-1586985289688-ca3cf47d3e6e?w=500&auto=format" }]
   },
   { 
     id: 'gid://shopify/Product/5', 
-    title: 'Lemon Blueberry Cake', 
-    description: 'Zesty lemon cake with blueberry compote',
-    variants: [{ id: 'variant5', price: '27.99' }],
-    images: [] 
+    title: 'Lemon Drizzle Cake', 
+    description: 'Zesty lemon cake with sweet glaze',
+    variants: [{ id: 'variant5', price: '25.99' }],
+    images: [{ src: "https://images.unsplash.com/photo-1514910457252-414ca0d56c0a?w=500&auto=format" }]
   },
   { 
     id: 'gid://shopify/Product/6', 
-    title: 'Caramel Drizzle Cake', 
-    description: 'Butter cake with caramel drizzle and toffee bits',
-    variants: [{ id: 'variant6', price: '29.99' }],
-    images: [] 
+    title: 'Carrot Walnut Cake', 
+    description: 'Moist carrot cake with walnuts and cream cheese frosting',
+    variants: [{ id: 'variant6', price: '28.99' }],
+    images: [{ src: "https://images.unsplash.com/photo-1603532648955-039310d9ed75?w=500&auto=format" }]
   },
   { 
     id: 'gid://shopify/Product/7', 
-    title: 'Carrot Spice Cake', 
-    description: 'Moist carrot cake with spices and cream cheese frosting',
-    variants: [{ id: 'variant7', price: '26.99' }],
-    images: [] 
+    title: 'Black Forest Gateau', 
+    description: 'German classic with chocolate, cherries, and whipped cream',
+    variants: [{ id: 'variant7', price: '32.99' }],
+    images: [{ src: "https://images.unsplash.com/photo-1606890737304-57a1ca8a5b62?w=500&auto=format" }]
   },
   { 
     id: 'gid://shopify/Product/8', 
     title: 'Coconut Paradise Cake', 
     description: 'Coconut cake with coconut cream and toasted coconut flakes',
     variants: [{ id: 'variant8', price: '31.99' }],
-    images: [] 
+    images: [{ src: "https://images.unsplash.com/photo-1614707267537-b85aaf00c4b7?w=500&auto=format" }]
   },
   { 
     id: 'gid://shopify/Product/9', 
     title: 'Tiramisu Delight', 
     description: 'Coffee-soaked layers with mascarpone cream and cocoa dusting',
     variants: [{ id: 'variant9', price: '36.99' }],
-    images: [] 
+    images: [{ src: "https://images.unsplash.com/photo-1571115177098-24ec42ed204d?w=500&auto=format" }]
   },
   { 
     id: 'gid://shopify/Product/10', 
     title: 'Matcha Green Tea Cake', 
     description: 'Delicate matcha-flavored cake with white chocolate accents',
     variants: [{ id: 'variant10', price: '33.99' }],
-    images: [] 
+    images: [{ src: "https://images.unsplash.com/photo-1592151675528-1a0c09dde9e2?w=500&auto=format" }]
   },
   { 
     id: 'gid://shopify/Product/11', 
     title: 'Black Forest Gateau', 
     description: 'Cherry-filled chocolate cake with whipped cream and kirsch',
     variants: [{ id: 'variant11', price: '35.99' }],
-    images: [] 
+    images: [{ src: "https://images.unsplash.com/photo-1606890737304-57a1ca8a5b62?w=500&auto=format" }]
   },
   { 
     id: 'gid://shopify/Product/12', 
     title: 'Honey Lavender Cake', 
     description: 'Aromatic lavender cake with honey buttercream and candied flowers',
     variants: [{ id: 'variant12', price: '37.99' }],
-    images: [] 
+    images: [{ src: "https://images.unsplash.com/photo-1571115177098-24ec42ed204d?w=500&auto=format" }]
   }
 ];
 
@@ -193,8 +193,16 @@ function ProductCard({ product }: { product: any }) {
     if (product.images && product.images.length > 0) {
       return product.images[0].src;
     }
-    // Use a local placeholder based on product ID
-    return `/images/cake-${(productId % 4) + 1}.jpg`;
+    
+    // Use CDN images instead of local placeholders since local files are empty
+    const placeholders = [
+      "https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=500&auto=format", // Chocolate cake
+      "https://images.unsplash.com/photo-1621303837174-89787a7d4729?w=500&auto=format", // Birthday cake
+      "https://images.unsplash.com/photo-1562777717-dc6984f65a63?w=500&auto=format", // Strawberry cake
+      "https://images.unsplash.com/photo-1586985289688-ca3cf47d3e6e?w=500&auto=format"  // Fancy cake
+    ];
+    
+    return placeholders[productId % placeholders.length];
   };
 
   return (
