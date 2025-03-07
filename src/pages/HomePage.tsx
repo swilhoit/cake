@@ -328,15 +328,15 @@ export default function HomePage() {
         
         {/* Marquee Container - Single line only */}
         <div className="marquee-container relative w-full">
-          {/* Single Marquee - Left to Right - FASTER speed - Reduced number of models */}
+          {/* Single Marquee - Left to Right - FASTER speed - Increased number of models */}
           <div className="marquee-content flex animate-marquee-fast">
-            {/* Reduced the number of repetitions to avoid "Too many WebGL contexts" error */}
-            {[1, 2, 3, 4].map((item) => (
+            {/* Increased the number of repetitions as requested */}
+            {[1, 2, 3, 4, 5, 6].map((item) => (
               <React.Fragment key={`banh-left-${item}`}>
-                <div className="h-32 w-32 mx-3">
+                <div className="h-32 w-32 mx-2"> {/* Reduced margin from mx-3 to mx-2 to fit more items */}
                   <BanhMiModelSmall rotateRight={item % 2 === 0} />
                 </div>
-                <div className="flex items-center mx-3">
+                <div className="flex items-center mx-2"> {/* Reduced margin from mx-3 to mx-2 */}
                   <h3 className="text-4xl font-black text-black whitespace-nowrap font-rubik">
                     WE HAVE BANH MIS!
                   </h3>
