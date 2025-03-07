@@ -221,8 +221,11 @@ function ProductCard({ product }: { product: any }) {
                 powerPreference: 'default',
                 depth: true
               }}
-              className="!touch-none" /* Fix for mobile touch handling */
-              style={{ background: 'transparent' }}
+              className="touch-auto"
+              style={{ 
+                background: 'transparent',
+                touchAction: 'none'
+              }}
               onCreated={({ gl }) => {
                 // Set clear color with full transparency
                 gl.setClearColor(0x000000, 0);
@@ -388,7 +391,7 @@ function BanhMiModelSmall({ rotateRight }: { rotateRight: boolean }) {
     setRetryCount(0);
   }, []);
   
-  // Model URL - always use Google Cloud Storage
+  // Model URL - use a cake model that is consistent with the others
   const modelUrl = "https://storage.googleapis.com/kgbakerycakes/cake_model_1.glb";
   
   // Memoize the Canvas component to prevent unnecessary re-renders
@@ -402,8 +405,11 @@ function BanhMiModelSmall({ rotateRight }: { rotateRight: boolean }) {
         powerPreference: 'default',
         depth: true
       }}
-      className="!touch-none"
-      style={{ background: 'transparent' }}
+      className="touch-auto"
+      style={{ 
+        background: 'transparent',
+        touchAction: 'none'
+      }}
       onCreated={({ gl }) => {
         // Set clear color with full transparency
         gl.setClearColor(0x000000, 0);

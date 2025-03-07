@@ -379,8 +379,10 @@ export default function ProductPage() {
                 width: '100%', 
                 height: '100%',
                 borderRadius: '0.5rem',
-                outline: 'none'
+                outline: 'none',
+                touchAction: 'none'
               }}
+              className="touch-auto"
               onCreated={({ gl }) => {
                 // Set clear color with full transparency
                 gl.setClearColor(0x000000, 0);
@@ -435,6 +437,10 @@ export default function ProductPage() {
                 minZoom={0.6}
                 maxPolarAngle={Math.PI / 1.5}
                 minPolarAngle={0}
+                enableDamping={true}
+                dampingFactor={0.05}
+                rotateSpeed={0.7}
+                makeDefault
               />
             </Canvas>
           </div>
