@@ -33,8 +33,8 @@ export const preloadImages = (srcs: string[]): Promise<void[]> => {
 };
 
 /**
- * A simpler and more reliable approach to preload 3D models by creating an Image element
- * This works because three.js GLTFLoader will use the browser cache
+ * Advanced preloading for 3D models using THREE.js GLTFLoader
+ * This not only caches the model but also processes it for faster rendering
  * @param modelPath Path to the model file
  */
 export const preloadModel = (modelPath: string): Promise<void> => {
@@ -45,39 +45,102 @@ export const preloadModel = (modelPath: string): Promise<void> => {
   
   console.log(`Preloading model: ${modelPath}`);
   
-  // Create a promise that resolves when the image is loaded or errors
+  // Use THREE.js for comprehensive preloading
   return new Promise<void>((resolve) => {
-    // Create a new image element
-    const img = new Image();
-    
-    // Set the onload and onerror handlers to mark as complete
-    img.onload = () => {
-      preloadedAssets.add(modelPath);
-      console.log(`Successfully preloaded model: ${modelPath}`);
-      resolve();
-    };
-    
-    img.onerror = () => {
-      console.warn(`Error preloading model: ${modelPath}, but continuing`);
-      preloadedAssets.add(modelPath); // Still mark as preloaded to avoid retries
-      resolve(); // Resolve anyway to continue
-    };
-    
-    // Set crossOrigin to anonymous to avoid CORS issues
-    img.crossOrigin = 'anonymous';
-    
-    // Add a cache-busting parameter and set the src
-    const cacheBuster = `v=${Date.now()}`;
-    img.src = `${modelPath}${modelPath.includes('?') ? '&' : '?'}${cacheBuster}`;
-    
-    // Set a timeout to resolve the promise after 5 seconds if it hasn't resolved yet
-    setTimeout(() => {
-      if (!preloadedAssets.has(modelPath)) {
-        console.warn(`Timeout preloading model: ${modelPath}, but continuing`);
-        preloadedAssets.add(modelPath);
-        resolve();
-      }
-    }, 5000);
+    // First make sure THREE.js is available
+    import('three/examples/jsm/loaders/GLTFLoader.js').then(({ GLTFLoader }) => {
+      const loader = new GLTFLoader();
+      
+      // Set up cache control headers
+      const fetchOptions = {
+        cache: 'force-cache' as RequestCache,
+        headers: {
+          'Cache-Control': 'max-age=31536000' // Cache for a year
+        }
+      };
+      
+      // Use THREE's built-in loading manager
+      const loadingManager = new THREE.LoadingManager();
+      loadingManager.onProgress = (url, loaded, total) => {
+        console.log(`Loading ${url}: ${Math.round(loaded / total * 100)}%`);
+      };
+      
+      loader.setPath('');
+      loader.manager = loadingManager;
+      
+      // Load the model
+      loader.load(
+        modelPath,
+        // Success callback - model loaded
+        (gltf) => {
+          console.log(`Successfully loaded model: ${modelPath}`);
+          
+          // Store in global cache for reuse
+          if (typeof window !== 'undefined') {
+            if (!window._modelCache) {
+              window._modelCache = {};
+            }
+            
+            // Store preprocessed model in cache
+            window._modelCache[modelPath] = gltf;
+            
+            // Prep model for memory management
+            gltf.scene.traverse((node) => {
+              if (node instanceof THREE.Mesh) {
+                // Mark geometry for easier disposal later
+                if (node.geometry) {
+                  node.geometry.userData.cached = true;
+                }
+                
+                // Prep materials for reuse
+                if (node.material) {
+                  if (Array.isArray(node.material)) {
+                    node.material.forEach(material => {
+                      material.userData.cached = true;
+                    });
+                  } else {
+                    node.material.userData.cached = true;
+                  }
+                }
+              }
+            });
+            
+            // Mark as preloaded
+            preloadedAssets.add(modelPath);
+            resolve();
+          }
+        },
+        // Progress callback
+        (xhr) => {
+          const progress = xhr.loaded / xhr.total;
+          if (progress < 1) {
+            console.log(`${modelPath} ${Math.round(progress * 100)}% loaded`);
+          }
+        },
+        // Error callback
+        (error) => {
+          console.warn(`Error preloading model: ${modelPath}`, error);
+          
+          // Try a simple fetch as fallback
+          fetch(modelPath, fetchOptions)
+            .then(response => {
+              if (!response.ok) {
+                throw new Error(`Failed to fetch model: ${response.statusText}`);
+              }
+              console.log(`Basic fetch for model successful: ${modelPath}`);
+              preloadedAssets.add(modelPath);
+              resolve();
+            })
+            .catch(() => {
+              console.error(`All attempts to preload ${modelPath} failed`);
+              resolve(); // Still resolve to continue loading
+            });
+        }
+      );
+    }).catch(error => {
+      console.error("Error importing GLTFLoader:", error);
+      resolve(); // Resolve anyway to continue preloading flow
+    });
   });
 };
 
@@ -90,23 +153,19 @@ export const preloadModels = (modelPaths: string[]): Promise<void[]> => {
 };
 
 /**
- * Generates fixed array of cake model paths - always include all 5 models
+ * Returns fixed array of cake model paths that are known to work
  * @returns Array of model paths
  */
 export const getCakeModelPaths = (): string[] => {
-  // List of models we need to load - all 5 character models
-  const modelFiles = [
-    'strawberry.glb',
-    'nemo.glb',
-    'princess.glb', 
-    'turkey.glb',
-    'spongebob1.glb'
+  // These are the exact URIs that we'll use in the app
+  return [
+    'https://storage.googleapis.com/kgbakerycakes/optimized/strawberry.glb',
+    'https://storage.googleapis.com/kgbakerycakes/optimized/nemo.glb',
+    'https://storage.googleapis.com/kgbakerycakes/optimized/princess.glb',
+    'https://storage.googleapis.com/kgbakerycakes/optimized/turkey.glb',
+    'https://storage.googleapis.com/kgbakerycakes/optimized/spongebob1.glb',
+    'https://storage.googleapis.com/kgbakerycakes/banhmi.glb'  // Also preload the banh mi model
   ];
-
-  // Return full URL paths to all models
-  return modelFiles.map(modelFile => 
-    `https://storage.googleapis.com/kgbakerycakes/optimized/${modelFile}`
-  );
 };
 
 /**

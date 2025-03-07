@@ -1,3 +1,4 @@
+import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { ShopProvider } from './context/ShopContext';
 import Header from './components/Header';
@@ -54,32 +55,37 @@ const AssetPreloader = () => {
     preloadCriticalAssets({
       imageUrls: importantImages,
       onProgress: (progress) => {
+        console.log(`Preloading progress: ${progress.toFixed(1)}%`);
+        
         // Mark resources as loaded based on progress milestones
-        if (progress >= 20) {
+        // Wait longer for models to be fully loaded
+        if (progress >= 10) {
           markResourceLoaded('app-init');
           console.log("App init loading complete");
         }
         
-        if (progress >= 40) {
+        if (progress >= 30) {
           markResourceLoaded('header-render');
           console.log("Header loading complete");
         }
         
-        if (progress >= 60) {
+        if (progress >= 50) {
           markResourceLoaded('bakery-images');
           console.log("Images loading complete");
         }
         
-        if (progress >= 80) {
+        if (progress >= 70) {
           markResourceLoaded('footer-render');
           console.log("Footer loading complete");
         }
         
+        // Only mark 3D models as complete when we're almost done (95%)
         if (progress >= 95) {
           markResourceLoaded('3d-models');
           console.log("3D models loading complete");
         }
         
+        // Only mark homepage as ready when 100% complete
         if (progress >= 100) {
           console.log("All preloading complete, showing homepage");
           markResourceLoaded('homepage-render');
@@ -94,13 +100,13 @@ const AssetPreloader = () => {
       });
     });
     
-    // Safety fallback - if after 10 seconds we're still loading, mark everything as complete
+    // Safety fallback - if after 15 seconds we're still loading, mark everything as complete
     const safetyTimeout = setTimeout(() => {
       console.log("Safety timeout reached, marking all resources as loaded");
       criticalResources.forEach(resource => {
         markResourceLoaded(resource);
       });
-    }, 10000);
+    }, 15000);
     
     return () => clearTimeout(safetyTimeout);
   }, [registerResource, markResourceLoaded, products, preloadStarted]);
@@ -196,21 +202,25 @@ const AppContent = () => {
 };
 
 function App() {
-  // Use a slightly longer minimum loading time to ensure a smooth experience
+  // Use a longer minimum loading time to ensure models are fully loaded
+  // Also implement proper React.StrictMode for stability
   return (
-    <PreloadProvider minimumLoadingTime={5000}>
-      <ShopProvider>
-        <Router>
-          <Suspense fallback={<div className="fixed inset-0 bg-pink-100 flex items-center justify-center">
-            <div className="animate-spin h-12 w-12 border-4 border-pink-500 rounded-full border-t-transparent"></div>
-          </div>}>
-            <AssetPreloader />
-            <LoadingScreen />
-            <AppContent />
-          </Suspense>
-        </Router>
-      </ShopProvider>
-    </PreloadProvider>
+    <React.StrictMode>
+      <PreloadProvider minimumLoadingTime={20000}>
+        <ShopProvider>
+          <Router>
+            <Suspense fallback={<div className="fixed inset-0 bg-pink-100 flex items-center justify-center">
+              <div className="animate-spin h-12 w-12 border-4 border-pink-500 rounded-full border-t-transparent"></div>
+              <div className="ml-4 text-pink-800 font-medium">Loading 3D Models...</div>
+            </div>}>
+              <AssetPreloader />
+              <LoadingScreen />
+              <AppContent />
+            </Suspense>
+          </Router>
+        </ShopProvider>
+      </PreloadProvider>
+    </React.StrictMode>
   );
 }
 
