@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 // Loading indicator component without text
@@ -35,6 +36,14 @@ function modelPreloader() {
   
   // Create a global loader and configure it
   const loader = new GLTFLoader();
+  
+  // Add DRACOLoader for compressed models
+  const dracoLoader = new DRACOLoader();
+  dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.5/');
+  dracoLoader.setDecoderConfig({ type: 'js' }); // Use JavaScript decoder for better compatibility
+  
+  // Attach the DRACOLoader to GLTFLoader
+  loader.setDRACOLoader(dracoLoader);
   
   // Add a CORS proxy for Google Cloud Storage requests if needed
   const CLOUD_STORAGE_BASE = 'https://storage.googleapis.com/kgbakerycakes/optimized/';
@@ -222,13 +231,47 @@ function Model({
 }) {
   const [isPreloaded, setIsPreloaded] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastAttemptTime, setLastAttemptTime] = useState<number>(Date.now());
   
   // Get variant name based on the product ID
   const variantName = productId ? getCakeVariantName(Number(productId)) : 'nemo';
   
+  // Configure the DRACOLoader for useGLTF
+  useEffect(() => {
+    // Define the model URL
+    const modelUrl = `https://storage.googleapis.com/kgbakerycakes/optimized/${encodeURIComponent(variantName)}.glb`;
+    
+    // Set up DRACOLoader for the GLTFLoader that useGLTF will use
+    const dracoLoader = new DRACOLoader();
+    dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.5/');
+    dracoLoader.setDecoderConfig({ type: 'js' });
+    
+    // Configure GLTFLoader with DRACOLoader
+    const gltfLoader = new GLTFLoader();
+    gltfLoader.setDRACOLoader(dracoLoader);
+    
+    // Preload using the configured loader
+    useGLTF.preload(modelUrl);
+    
+    // Return cleanup function
+    return () => {
+      useGLTF.clear(modelUrl);
+    };
+  }, [variantName]);
+  
   // Preload the model first before using it with useGLTF
   useEffect(() => {
     let isMounted = true;
+    
+    // Check if we should force a reload (every 5 minutes)
+    const now = Date.now();
+    const fiveMinutes = 5 * 60 * 1000;
+    const shouldForceReload = now - lastAttemptTime > fiveMinutes;
+    
+    if (shouldForceReload) {
+      console.log(`Model ${variantName} has not been successfully loaded in over 5 minutes. Forcing cache invalidation.`);
+      setLastAttemptTime(now);
+    }
     
     console.log(`Starting preload for model: ${variantName}`);
     
@@ -251,14 +294,23 @@ function Model({
     return () => {
       isMounted = false;
     };
-  }, [variantName, onError]);
+  }, [variantName, onError, lastAttemptTime]);
 
   // Declare model loader to only use when preloaded
   const groupRef = useRef<THREE.Group>(null);
   
   // Only try to load with useGLTF when preloaded
   const url = `https://storage.googleapis.com/kgbakerycakes/optimized/${encodeURIComponent(variantName)}.glb`;
-  const { scene: gltf } = useGLTF(url);
+  
+  // Using a try-catch block to handle potential loading errors from useGLTF
+  let gltf;
+  try {
+    const loadedModel = useGLTF(url);
+    gltf = loadedModel.scene;
+  } catch (loadError) {
+    console.error(`Error in useGLTF: ${loadError}`);
+    gltf = null;
+  }
 
   // Handle rotation animation
   useFrame(() => {
@@ -269,10 +321,10 @@ function Model({
 
   // Call onLoad once the model is ready
   useEffect(() => {
-    if (isPreloaded && !error) {
+    if (isPreloaded && gltf && !error) {
       onLoad();
     }
-  }, [isPreloaded, onLoad, error]);
+  }, [isPreloaded, gltf, onLoad, error]);
 
   if (!isPreloaded || !gltf) {
     // Return an empty group while loading
