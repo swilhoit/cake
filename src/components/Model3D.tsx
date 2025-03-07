@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, Suspense } from 'react';
+import React, { useRef, useState, useEffect, Suspense, useCallback } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
@@ -29,6 +29,17 @@ function ModelError({ message }: { message: string }) {
 // Single instance of the model preloader to be used across the app
 const preloader = modelPreloader();
 
+// Create a global DRACOLoader to be reused
+const createDracoLoader = () => {
+  const dracoLoader = new DRACOLoader();
+  dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.5/');
+  dracoLoader.setDecoderConfig({ type: 'js' });
+  return dracoLoader;
+};
+
+// Setup global draco loader
+const globalDracoLoader = createDracoLoader();
+
 // Model preloader to handle loading and caching 3D models
 function modelPreloader() {
   const loadedModels = new Map();
@@ -37,13 +48,8 @@ function modelPreloader() {
   // Create a global loader and configure it
   const loader = new GLTFLoader();
   
-  // Add DRACOLoader for compressed models
-  const dracoLoader = new DRACOLoader();
-  dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.5/');
-  dracoLoader.setDecoderConfig({ type: 'js' }); // Use JavaScript decoder for better compatibility
-  
   // Attach the DRACOLoader to GLTFLoader
-  loader.setDRACOLoader(dracoLoader);
+  loader.setDRACOLoader(globalDracoLoader);
   
   // Add a CORS proxy for Google Cloud Storage requests if needed
   const CLOUD_STORAGE_BASE = 'https://storage.googleapis.com/kgbakerycakes/optimized/';
@@ -168,10 +174,14 @@ export default function Model3D({
     setError(null);
   }, [productId]);
 
-  const handleModelError = (message: string) => {
+  const handleModelError = useCallback((message: string) => {
     console.error(`Model Error: ${message}`);
     setError(message);
-  };
+  }, []);
+  
+  const handleModelLoaded = useCallback(() => {
+    setIsLoading(false);
+  }, []);
 
   // Return the 3D model content directly (no Canvas)
   return (
@@ -183,7 +193,7 @@ export default function Model3D({
         idNumber={idNumber}
         bgColor={bgColor}
         isDetailView={isDetailView}
-        onLoad={() => setIsLoading(false)} 
+        onLoad={handleModelLoaded} 
         onError={handleModelError}
       />
     </Suspense>
@@ -229,139 +239,65 @@ function Model({
   onLoad: () => void;
   onError: (message: string) => void;
 }) {
-  const [isPreloaded, setIsPreloaded] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-  const [modelUrl, setModelUrl] = useState<string>('');
-  
   // Get variant name based on the product ID
   const variantName = productId ? getCakeVariantName(Number(productId)) : 'nemo';
   
-  // Set up model URL on first render
-  useEffect(() => {
-    const url = `https://storage.googleapis.com/kgbakerycakes/optimized/${encodeURIComponent(variantName)}.glb`;
-    console.log(`Setting up model URL: ${url} for product ${productId}`);
-    setModelUrl(url);
-  }, [variantName, productId]);
+  // Handle direct model loading with useGLTF from drei
+  const modelUrl = `https://storage.googleapis.com/kgbakerycakes/optimized/${encodeURIComponent(variantName)}.glb`;
   
-  // Setup DRACOLoader once
+  // Handle different loading strategies for product page vs. home page
+  const isHomePage = !isDetailView;
+  
+  // Preload models in the background
   useEffect(() => {
-    if (!modelUrl) return;
-    
-    // Configure the global useGLTF DRACOLoader
-    console.log(`Setting up DRACOLoader for ${modelUrl}`);
-    
-    // Clear any previous preloads
-    try {
-      useGLTF.clear(modelUrl);
-    } catch (e) {
-      console.log("No previous model to clear");
-    }
-    
-    // Preload the model with the correct URL
+    // Preload model URL for useGLTF
     useGLTF.preload(modelUrl);
     
+    // Set global DRACOLoader for all useGLTF calls
+    const gltfLoader = new GLTFLoader();
+    gltfLoader.setDRACOLoader(globalDracoLoader);
+    
     return () => {
+      // Clean up when unmounted
       try {
         useGLTF.clear(modelUrl);
       } catch (e) {
         // Ignore cleanup errors
       }
     };
-  }, [modelUrl]);
+  }, [modelUrl]); 
   
-  // Use direct GLTFLoader for more control
-  useEffect(() => {
-    if (!modelUrl) return;
-    
-    console.log(`Starting direct load for model: ${modelUrl}`);
-    let isMounted = true;
-    
-    // Setup loaders
-    const dracoLoader = new DRACOLoader();
-    dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.5/');
-    
-    const loader = new GLTFLoader();
-    loader.setDRACOLoader(dracoLoader);
-    
-    // Add cache-busting parameter
-    const loadUrl = `${modelUrl}?t=${Date.now()}`;
-    
-    loader.load(
-      loadUrl,
-      (gltf) => {
-        if (!isMounted) return;
-        console.log(`Successfully loaded model: ${modelUrl}`);
-        setIsPreloaded(true);
-        // We'll set our loaded model in a useRef in the rendering section
-      },
-      (progress) => {
-        if (!isMounted) return;
-        if (progress.lengthComputable) {
-          const percent = Math.round((progress.loaded / progress.total) * 100);
-          console.log(`Loading ${modelUrl}: ${percent}%`);
-        }
-      },
-      (error: any) => {
-        if (!isMounted) return;
-        const errorMsg = error.message || String(error);
-        console.error(`Error loading model ${modelUrl}: ${errorMsg}`);
-        setError(errorMsg);
-        onError(errorMsg);
-      }
-    );
-    
-    return () => {
-      isMounted = false;
-      dracoLoader.dispose();
-    };
-  }, [modelUrl, onError]);
-  
-  // Ref to store our loaded model
-  const modelRef = useRef<THREE.Group | null>(null);
-  
-  // Access the gltf model - use a try/catch for safety
-  let gltf = null;
+  // Try to load the model using useGLTF
+  let gltf;
   try {
-    if (modelUrl && isPreloaded) {
-      const result = useGLTF(modelUrl);
-      gltf = result.scene;
-      console.log('useGLTF returned model:', result);
-    }
-  } catch (e) {
-    console.error('Error in useGLTF:', e);
-    // We'll continue with null gltf and show an empty group
+    gltf = useGLTF(modelUrl).scene;
+  } catch (error) {
+    console.error(`Error loading model with useGLTF: ${error}`);
+    onError(`Failed to load 3D model: ${error}`);
+    return <ModelError message={String(error)} />;
   }
   
-  // Handle rotation animation
+  // If we have a model, set up the 3D view
   const groupRef = useRef<THREE.Group>(null);
+  
+  // Handle rotation animation
   useFrame(() => {
     if (groupRef.current) {
       groupRef.current.rotation.y += rotationSpeed;
     }
   });
   
-  // Notify parent when model is ready
+  // Notify parent when model is loaded
   useEffect(() => {
-    if (isPreloaded && gltf && !error) {
-      console.log('Model ready - calling onLoad');
+    if (gltf) {
+      console.log(`Model ready: ${variantName}`);
       onLoad();
     }
-  }, [isPreloaded, gltf, onLoad, error]);
+  }, [gltf, onLoad, variantName]);
   
-  // Debug output
-  useEffect(() => {
-    console.log('Model render state:', { 
-      productId, 
-      variantName, 
-      isPreloaded, 
-      hasGltf: !!gltf, 
-      error 
-    });
-  }, [productId, variantName, isPreloaded, gltf, error]);
-  
-  if (!isPreloaded || !gltf) {
-    console.log(`Rendering empty group for ${variantName} - preloaded: ${isPreloaded}, hasGltf: ${!!gltf}`);
-    return <group />;
+  if (!gltf) {
+    console.warn(`No GLTF model available for ${variantName}`);
+    return <ModelLoader />;
   }
   
   return (
