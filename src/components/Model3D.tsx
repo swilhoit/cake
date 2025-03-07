@@ -138,12 +138,13 @@ function Model({
     const isProduction = window.location.hostname.includes('vercel.app');
     
     if (isProduction) {
-      // In production, always use the only model we know is working
-      console.log('Production environment detected - using main model.glb');
-      return '/models/model.glb';
+      // In production, use the Google Cloud Storage path instead of looking for local files
+      // This avoids 404 errors when the files don't exist in the deployment
+      console.log('Production environment detected - using Google Cloud Storage model');
+      return `https://storage.googleapis.com/kgbakerycakes/cake_model_${modelNum}.glb`;
     } 
     
-    // In development, use Google Cloud Storage
+    // In development, also use Google Cloud Storage
     const path = `https://storage.googleapis.com/kgbakerycakes/cake_model_${modelNum}.glb`;
     console.log(`Development environment - loading model from Google Cloud Storage: ${path}`);
     return path;
@@ -192,10 +193,10 @@ function Model({
     // If we're already showing the fallback, no need to try again
     if (showFallback) return;
     
-    // Always try the main model.glb as fallback
+    // Try a different model if first one fails
     if (!usingFallback) {
       setUsingFallback(true);
-      console.log('Trying fallback model: /models/model.glb');
+      console.log('Trying fallback model: cake_model_1.glb');
       return;
     }
     
@@ -212,7 +213,7 @@ function Model({
   }, [onLoad]);
   
   // Load model with error handling
-  const modelUrl = usingFallback ? '/models/model.glb' : modelPath;
+  const modelUrl = usingFallback ? 'https://storage.googleapis.com/kgbakerycakes/cake_model_1.glb' : modelPath;
   
   const { scene } = useGLTF(modelUrl);
   

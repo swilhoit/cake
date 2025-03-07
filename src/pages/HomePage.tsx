@@ -111,14 +111,15 @@ const getDeviceCapabilities = (): { isMobile: boolean, shouldUseImages: boolean,
   const deviceMemory = (navigator as any).deviceMemory || 0;
   
   // Determine if we should use images instead of 3D models based on device capability
-  // We've fixed the model loading, so we no longer need to force images in production
+  // Being more conservative to prevent WebGL context issues
   const shouldUseImages = 
-    isMobile && (
-      cpuCores < 4 || 
-      deviceMemory < 2 || 
-      // If Safari mobile, be more conservative as it has more WebGL issues
-      (/iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream)
-    );
+    // Force images in production environment to avoid WebGL context issues
+    window.location.hostname.includes('vercel.app') ||
+    // Be conservative with mobile devices
+    isMobile || 
+    // Be conservative with low-end devices
+    cpuCores < 6 || 
+    deviceMemory < 4;
   
   // Set appropriate device pixel ratio based on device capability
   const dpr: [number, number] = isMobile ? [1, 1.5] : [1, 2];
@@ -328,15 +329,15 @@ export default function HomePage() {
         
         {/* Marquee Container - Single line only */}
         <div className="marquee-container relative w-full">
-          {/* Single Marquee - Left to Right - FASTER speed - Increased number of models */}
+          {/* Single Marquee - Left to Right - FASTER speed - Reduced number of models */}
           <div className="marquee-content flex animate-marquee-fast">
-            {/* Increased the number of repetitions as requested */}
-            {[1, 2, 3, 4, 5, 6].map((item) => (
+            {/* Reduced the number of repetitions to prevent WebGL context issues */}
+            {[1, 2, 3].map((item) => (
               <React.Fragment key={`banh-left-${item}`}>
-                <div className="h-32 w-32 mx-2"> {/* Reduced margin from mx-3 to mx-2 to fit more items */}
+                <div className="h-32 w-32 mx-2">
                   <BanhMiModelSmall rotateRight={item % 2 === 0} />
                 </div>
-                <div className="flex items-center mx-2"> {/* Reduced margin from mx-3 to mx-2 */}
+                <div className="flex items-center mx-2">
                   <h3 className="text-4xl font-black text-black whitespace-nowrap font-rubik">
                     WE HAVE BANH MIS!
                   </h3>
@@ -352,21 +353,9 @@ export default function HomePage() {
 
 // Smaller Banh Mi model optimized for the marquee
 function BanhMiModelSmall({ rotateRight }: { rotateRight: boolean }) {
-  // Check if we're in production environment
-  const isProduction = useMemo(() => {
-    return typeof window !== 'undefined' && 
-      (window.location.hostname.includes('vercel.app') || window.location.hostname !== 'localhost');
-  }, []);
-  
-  // State to track whether to use fallback - true for production, false for dev
-  const [useFallback, setUseFallback] = useState(isProduction);
-  
-  // Don't try to load models in production due to CORS issues
-  const modelUrl = useMemo(() => {
-    return useFallback 
-      ? "" // Empty URL - we'll use a fallback box instead in production
-      : "https://storage.googleapis.com/kgbakerycakes/banhmi.glb";
-  }, [useFallback]);
+  // Always use the fallback box in both production and development
+  // This prevents WebGL context loss by not loading too many 3D models
+  const [useFallback] = useState(true);
   
   // Memoize the Canvas component to prevent unnecessary re-renders
   return useMemo(() => (
@@ -385,51 +374,31 @@ function BanhMiModelSmall({ rotateRight }: { rotateRight: boolean }) {
         // Set clear color with full transparency
         gl.setClearColor(0x000000, 0);
       }}
-      onError={() => {
-        console.error("Canvas error occurred");
-        setUseFallback(true);
-      }}
       // Enable continuous rendering for rotation animation
       frameloop="always"
     >
       {/* Improved lighting setup */}
-      <ambientLight intensity={0.8} /> {/* Increased ambient light for better overall illumination */}
+      <ambientLight intensity={0.8} />
       <spotLight 
         position={[5, 10, 5]} 
         angle={0.4} 
         penumbra={1} 
-        intensity={2.5} // Increased intensity for brighter lighting
+        intensity={2.5}
         castShadow 
-        color="#ffffff" // Pure white light for better illumination
+        color="#ffffff"
       />
-      <spotLight 
-        position={[-5, 5, -5]} 
-        angle={0.3} 
-        penumbra={1} 
-        intensity={1.5} // Increased intensity for the fill light
-        castShadow={false} 
-        color="#fff9e0" // Warm fill light
-      />
-      <directionalLight // Added directional light for better definition
+      <directionalLight
         position={[0, 5, 5]}
-        intensity={1.2}
+        intensity={1.0}
         color="#ffffff"
       />
       
-      {/* Using a separate component for the rotating model with error handling */}
+      {/* Always use the fallback box to prevent WebGL context issues */}
       <Suspense fallback={null}>
-        {useFallback ? (
-          <FallbackBanhMi rotateRight={rotateRight} />
-        ) : (
-          <RotatingModel 
-            url={modelUrl} 
-            rotateRight={rotateRight} 
-            onLoadFailed={() => setUseFallback(true)} 
-          />
-        )}
+        <FallbackBanhMi rotateRight={rotateRight} />
       </Suspense>
     </Canvas>
-  ), [modelUrl, rotateRight, useFallback]);
+  ), [rotateRight]);
 }
 
 // Fallback model for production where CORS prevents loading external models
