@@ -75,12 +75,16 @@ export default function Model3D({
   scale = 1, 
   rotationSpeed = 0.005, 
   productId,
-  isDetailView = false
+  isDetailView = false,
+  onLoad,
+  onError
 }: { 
   scale?: number; 
   rotationSpeed?: number; 
   productId?: string | number;
   isDetailView?: boolean;
+  onLoad?: () => void;
+  onError?: (message: string) => void;
 }) {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -101,11 +105,13 @@ export default function Model3D({
   const handleModelError = useCallback((message: string) => {
     console.error(`Model Error: ${message}`);
     setError(message);
-  }, []);
+    if (onError) onError(message);
+  }, [onError]);
   
   const handleModelLoaded = useCallback(() => {
     setIsLoading(false);
-  }, []);
+    if (onLoad) onLoad();
+  }, [onLoad]);
 
   // Return the 3D model content directly (no Canvas)
   return (

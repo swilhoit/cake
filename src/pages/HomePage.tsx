@@ -454,6 +454,8 @@ function CanvasContent({
           scale={scaleValue}
           rotationSpeed={rotationSpeed}
           isDetailView={false}
+          onLoad={handleLoad}
+          onError={handleError}
         />
       </Suspense>
     </>
