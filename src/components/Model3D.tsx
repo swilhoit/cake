@@ -283,8 +283,8 @@ function Model({
   // Get variant name based on the product ID
   const variantName = productId ? getCakeVariantName(Number(productId)) : 'default';
   
-  // Construct the model URL based on the variant name
-  const modelUrl = `https://storage.googleapis.com/kgbakerycakes/optimized/${variantName}.glb`;
+  // Construct the model URL based on the variant name - ensure URL encoding for spaces
+  const modelUrl = `https://storage.googleapis.com/kgbakerycakes/optimized/${encodeURIComponent(variantName)}.glb`;
   
   // Preload the model first before using it with useGLTF
   useEffect(() => {
@@ -361,23 +361,24 @@ function Model({
 
 // Get a cake variant name based on ID number for visual differentiation
 function getCakeVariantName(id: number): string {
-  const variants = [
-    "Classic Vanilla",
-    "Triple Chocolate",
-    "Strawberry Dream",
-    "Lemon Zest",
-    "Spiced Carrot",
-    "Blueberry Burst",
-    "Red Velvet",
-    "Coconut Cream",
-    "Marble Swirl",
-    "Black Forest"
-  ];
+  // Map product IDs to specific cake variant names
+  const cakeVariants: Record<number, string> = {
+    1: "nemo",
+    2: "princess",
+    3: "spongebob1",
+    4: "strawberry",
+    5: "turkey",
+    6: "Black Forest",
+    7: "Custom Cake",
+    8: "Classic Vanilla", 
+    9: "Triple Chocolate",
+    10: "Strawberry Dream"
+  };
   
-  // If ID is valid (1-10), return the corresponding variant name
-  if (id >= 1 && id <= variants.length) {
-    return variants[id - 1];
-  }
+  // Get the variant name if it exists, otherwise use the default
+  const variantName = cakeVariants[id] || 
+                     (id > 10 ? cakeVariants[id % 10 || 10] : "nemo");
   
-  return "Custom Cake";
+  console.log(`Variant name for product ID ${id}: ${variantName}`);
+  return variantName;
 } 
