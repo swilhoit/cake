@@ -149,6 +149,9 @@ function ProductCard({ product }: { product: any }) {
   const [retryCount, setRetryCount] = useState(0);
   const navigate = useNavigate();
   const [isHovered, setIsHovered] = useState(false);
+  const [scaleValue, setScaleValue] = useState(1.3);
+  const [containerScale, setContainerScale] = useState(1);
+  const [rotationSpeed, setRotationSpeed] = useState(isMobile ? 0.003 : 0.005);
 
   // Extract product ID from the Shopify handle or use a default ID
   const productId = product.id ? parseInt(product.id.split('/').pop() || '1', 10) : 1;
@@ -171,6 +174,44 @@ function ProductCard({ product }: { product: any }) {
     
     return () => clearTimeout(timer);
   }, [isMobile, shouldUseImages]);
+
+  // Smooth transition for scale and rotation values using useSpring-like approach
+  useEffect(() => {
+    let frameId: number;
+    const targetScale = isHovered ? 2.0 : 1.3;
+    const targetContainerScale = isHovered ? 1.2 : 1;
+    const targetRotationSpeed = isHovered ? 0.01 : (isMobile ? 0.003 : 0.005);
+    const duration = 600; // ms
+    const startTime = performance.now();
+    const startScale = scaleValue;
+    const startContainerScale = containerScale;
+    const startRotationSpeed = rotationSpeed;
+    
+    const animate = (currentTime: number) => {
+      const elapsedTime = currentTime - startTime;
+      const progress = Math.min(elapsedTime / duration, 1);
+      
+      // Cubic bezier easing function (ease-out-cubic)
+      const eased = 1 - Math.pow(1 - progress, 3);
+      
+      // Interpolate between start and target values
+      const newScale = startScale + (targetScale - startScale) * eased;
+      const newContainerScale = startContainerScale + (targetContainerScale - startContainerScale) * eased;
+      const newRotationSpeed = startRotationSpeed + (targetRotationSpeed - startRotationSpeed) * eased;
+      
+      setScaleValue(newScale);
+      setContainerScale(newContainerScale);
+      setRotationSpeed(newRotationSpeed);
+      
+      if (progress < 1) {
+        frameId = requestAnimationFrame(animate);
+      }
+    };
+    
+    frameId = requestAnimationFrame(animate);
+    
+    return () => cancelAnimationFrame(frameId);
+  }, [isHovered, isMobile]);
 
   // Handle 3D model error with retry mechanism
   const handleModelError = () => {
@@ -234,7 +275,8 @@ function ProductCard({ product }: { product: any }) {
         <img 
           src={getFallbackImageUrl()} 
           alt={product.title} 
-          className={`w-full h-full object-contain transition-transform duration-300 ${isHovered ? 'scale-150' : ''}`}
+          className="w-full h-full object-contain transition-transform duration-500 ease-out"
+          style={{ transform: `scale(${isHovered ? 1.5 : 1})` }}
         />
       ) : isVisible && (
         <Canvas
@@ -253,7 +295,7 @@ function ProductCard({ product }: { product: any }) {
             touchAction: 'none',
             overflow: 'visible',
             transition: 'transform 0.3s ease-out',
-            transform: isHovered ? 'scale(1.2)' : 'scale(1)'
+            transform: `scale(${containerScale})`
           }}
           onCreated={({ gl }) => {
             // Set clear color with full transparency
@@ -269,8 +311,8 @@ function ProductCard({ product }: { product: any }) {
             {!modelError ? (
               <>
                 <Model3D 
-                  scale={isHovered ? 2.0 : 1.3} 
-                  rotationSpeed={isMobile ? 0.003 : isHovered ? 0.01 : 0.005} 
+                  scale={scaleValue} 
+                  rotationSpeed={rotationSpeed} 
                   productId={productId} 
                 />
                 {!isMobile && <Environment preset="city" />}
