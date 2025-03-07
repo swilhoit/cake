@@ -283,8 +283,16 @@ function Model({
   // Get variant name based on the product ID
   const variantName = productId ? getCakeVariantName(Number(productId)) : 'default';
   
-  // Construct the model URL based on the variant name - ensure URL encoding for spaces
-  const modelUrl = `https://storage.googleapis.com/kgbakerycakes/optimized/${encodeURIComponent(variantName)}.glb`;
+  // Properly URL encode the variant name for the model URL
+  const encodedVariantName = encodeURIComponent(variantName);
+  
+  // Construct the model URL with proper encoding
+  const modelUrl = `https://storage.googleapis.com/kgbakerycakes/optimized/${encodedVariantName}.glb`;
+  
+  // Log the final URL for debugging
+  useEffect(() => {
+    console.log(`Model URL: ${modelUrl}`);
+  }, [modelUrl]);
   
   // Preload the model first before using it with useGLTF
   useEffect(() => {
@@ -299,18 +307,43 @@ function Model({
           setIsPreloaded(true);
         }
       })
-      .catch((preloadError) => {
+      .catch((err) => {
         if (isMounted) {
-          console.error(`Model error: ${preloadError.message}`);
-          setError(`Failed to preload model: ${preloadError.message}`);
-          onError(`Failed to preload model: ${preloadError.message}`);
+          const errorMessage = `Error preloading model: ${err.message || 'Unknown error'}`;
+          console.error(errorMessage);
+          
+          // Try the local fallback when in development
+          if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+            console.log(`Attempting local fallback for: ${variantName}`);
+            const localModelUrl = `/models/${encodedVariantName}.glb`;
+            
+            // Retry with local model path
+            preloader.preload(localModelUrl)
+              .then(() => {
+                if (isMounted) {
+                  console.log(`Local model preloaded successfully: ${localModelUrl}`);
+                  setIsPreloaded(true);
+                }
+              })
+              .catch((localErr) => {
+                if (isMounted) {
+                  const fullError = `Failed to load model from cloud and local fallback: ${localErr.message}`;
+                  console.error(fullError);
+                  setError(fullError);
+                  onError(fullError);
+                }
+              });
+          } else {
+            setError(errorMessage);
+            onError(errorMessage);
+          }
         }
       });
     
     return () => {
       isMounted = false;
     };
-  }, [modelUrl, onError]);
+  }, [modelUrl, onError, variantName]);
   
   // Declare model loader to only use when preloaded
   let gltf: GLTF | null = null;
@@ -361,24 +394,23 @@ function Model({
 
 // Get a cake variant name based on ID number for visual differentiation
 function getCakeVariantName(id: number): string {
-  // Map product IDs to specific cake variant names
+  // UPDATED: Map product IDs to known existing model names in the bucket
+  // Based on our checks, we know nemo.glb exists
+  // We'll use models that we know exist in the bucket
   const cakeVariants: Record<number, string> = {
     1: "nemo",
-    2: "princess",
-    3: "spongebob1",
-    4: "strawberry",
-    5: "turkey",
-    6: "Black Forest",
-    7: "Custom Cake",
-    8: "Classic Vanilla", 
-    9: "Triple Chocolate",
-    10: "Strawberry Dream"
+    2: "nemo", // Replace with "princess" when model exists
+    3: "nemo", // Replace with "spongebob1" when model exists  
+    4: "nemo", // Replace with "strawberry" when model exists
+    5: "nemo", // Replace with "turkey" when model exists
+    6: "nemo", // Replace with actual models when they exist
+    7: "nemo", 
+    8: "nemo", 
+    9: "nemo",
+    10: "nemo"
   };
   
-  // Get the variant name if it exists, otherwise use the default
-  const variantName = cakeVariants[id] || 
-                     (id > 10 ? cakeVariants[id % 10 || 10] : "nemo");
-  
-  console.log(`Variant name for product ID ${id}: ${variantName}`);
-  return variantName;
+  // Use nemo for all products since we know it exists
+  console.log(`Retrieved cake variant for ID ${id}: Using "nemo" as fallback until all models are uploaded`);
+  return "nemo";
 } 
