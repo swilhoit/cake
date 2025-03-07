@@ -361,9 +361,8 @@ export default function HomePage() {
 
 // Smaller Banh Mi model optimized for the marquee
 function BanhMiModelSmall({ rotateRight }: { rotateRight: boolean }) {
-  // Always use the fallback box in both production and development
-  // This prevents WebGL context loss by not loading too many 3D models
-  const [useFallback] = useState(true);
+  // Always use the fallback box to prevent WebGL context issues
+  // This is a more reliable approach for the marquee section
   
   // Memoize the Canvas component to prevent unnecessary re-renders
   return useMemo(() => (
@@ -480,8 +479,18 @@ function RotatingModel({ url, rotateRight, onLoadFailed }: {
     onLoadFailed();
   }, [onLoadFailed]);
   
-  // Load the 3D model
-  const { scene } = useGLTF(url);
+  // Load the 3D model with error handling
+  let scene: THREE.Group | undefined;
+  try {
+    const result = useGLTF(url, undefined, undefined, (error) => {
+      console.error('GLTF loader error:', error);
+      handleError(error);
+    });
+    scene = result.scene;
+  } catch (error) {
+    console.error('Error in useGLTF hook:', error);
+    handleError(error);
+  }
   
   // Always declare all hooks regardless of conditions to maintain hook order
   // Handle errors through useEffect monitoring
@@ -519,7 +528,7 @@ function RotatingModel({ url, rotateRight, onLoadFailed }: {
     const clonedScene = scene.clone();
     
     // Apply random color tint to make each model look unique
-    clonedScene.traverse((child) => {
+    clonedScene.traverse((child: THREE.Object3D) => {
       if (child instanceof THREE.Mesh && child.material) {
         if (Array.isArray(child.material)) {
           child.material = child.material.map(mat => {

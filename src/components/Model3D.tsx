@@ -127,26 +127,15 @@ function Model({
   const [modelLoaded, setModelLoaded] = useState(false);
   const [showFallback, setShowFallback] = useState(false);
   
-  // Handle local models for development to avoid CORS issues
-  const idNum = parseInt(idNumber);
   // Limit the model number to 1-8 (available models)
+  const idNum = parseInt(idNumber);
   const modelNum = (!isNaN(idNum) && idNum > 0) ? ((idNum - 1) % 8) + 1 : 1;
   
-  // Set the model path with fallback options
+  // Set the model path - Always use Google Cloud Storage for consistent behavior
   const modelPath = useMemo(() => {
-    // Always use the numbered model, but cycle through 1-8 for higher IDs
-    const isProduction = window.location.hostname.includes('vercel.app');
-    
-    if (isProduction) {
-      // In production, use the Google Cloud Storage path instead of looking for local files
-      // This avoids 404 errors when the files don't exist in the deployment
-      console.log('Production environment detected - using Google Cloud Storage model');
-      return `https://storage.googleapis.com/kgbakerycakes/cake_model_${modelNum}.glb`;
-    } 
-    
-    // In development, also use Google Cloud Storage
+    // Always use GCS path to avoid CORS issues
     const path = `https://storage.googleapis.com/kgbakerycakes/cake_model_${modelNum}.glb`;
-    console.log(`Development environment - loading model from Google Cloud Storage: ${path}`);
+    console.log(`Loading model from: ${path}`);
     return path;
   }, [modelNum]);
   
@@ -195,8 +184,8 @@ function Model({
     
     // Try a different model if first one fails
     if (!usingFallback) {
-      setUsingFallback(true);
       console.log('Trying fallback model: cake_model_1.glb');
+      setUsingFallback(true);
       return;
     }
     
@@ -215,7 +204,18 @@ function Model({
   // Load model with error handling
   const modelUrl = usingFallback ? 'https://storage.googleapis.com/kgbakerycakes/cake_model_1.glb' : modelPath;
   
-  const { scene } = useGLTF(modelUrl);
+  // Use a try-catch block around useGLTF to handle exceptions
+  let scene: THREE.Group | undefined;
+  try {
+    const result = useGLTF(modelUrl, undefined, undefined, (error) => {
+      console.error('GLTF loader error:', error);
+      handleError(error);
+    });
+    scene = result.scene;
+  } catch (error) {
+    console.error('Error in useGLTF hook:', error);
+    handleError(error);
+  }
   
   // Update error handler to watch for changes to scene
   useEffect(() => {
@@ -228,7 +228,6 @@ function Model({
   const model = useMemo(() => {
     try {
       if (!scene) {
-        handleError("No scene available");
         return new THREE.Group();
       }
       
@@ -256,7 +255,7 @@ function Model({
     if (!model || model.children.length === 0) return;
     
     try {
-      model.traverse((child) => {
+      model.traverse((child: THREE.Object3D) => {
         if (child instanceof THREE.Mesh && child.material) {
           // Create a copy of the material to avoid affecting other instances
           if (Array.isArray(child.material)) {
@@ -281,9 +280,8 @@ function Model({
       });
     } catch (error) {
       console.warn("Error applying material tint:", error);
-      handleError(error);
     }
-  }, [model, bgColor, handleError]);
+  }, [model, bgColor]);
 
   // Animation loop - rotate the mesh with custom rotation pattern
   useFrame((state) => {

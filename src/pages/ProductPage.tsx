@@ -133,8 +133,9 @@ export default function ProductPage() {
     console.log(`Model error in ProductPage, retry: ${retryCount}`);
     setModelError(true);
     
-    // Fall back to image immediately in production
+    // Always fall back to image in production to ensure a good user experience
     if (window.location.hostname.includes('vercel.app')) {
+      console.log('Production environment detected - falling back to image');
       setUseFallbackImage(true);
       return;
     }
@@ -143,12 +144,14 @@ export default function ProductPage() {
     if (retryCount < 2) {
       const retryDelay = (retryCount + 1) * 1000; // 1s, then 2s
       
+      console.log(`Retrying 3D model load in ${retryDelay}ms`);
       setTimeout(() => {
         setModelError(false);
         setRetryCount(prev => prev + 1);
       }, retryDelay);
     } else {
       // After retries, fall back to image
+      console.log('Max retries reached - falling back to image');
       setUseFallbackImage(true);
     }
   };
@@ -365,7 +368,7 @@ export default function ProductPage() {
             {useFallbackImage ? (
               <div className="bg-white rounded-lg shadow-lg overflow-hidden">
                 <img 
-                  src={selectedImage || (product?.images && product.images[0])} 
+                  src={selectedImage || getProductImages()[0]} 
                   alt={product?.title} 
                   className="w-full h-auto object-contain"  
                 />
@@ -392,7 +395,10 @@ export default function ProductPage() {
                   // Set clear color with full transparency
                   gl.setClearColor(0x000000, 0);
                 }}
-                onError={() => handleModelError()}
+                onError={() => {
+                  console.error('Canvas error occurred');
+                  handleModelError();
+                }}
               >
                 <ambientLight intensity={1.0} />
                 <spotLight 
@@ -422,7 +428,7 @@ export default function ProductPage() {
                       <Model3D 
                         scale={2.5}
                         rotationSpeed={0.003} 
-                        productId={id}
+                        productId={productId}
                         isDetailView={true}
                       />
                       <Environment preset="city" />
@@ -442,6 +448,16 @@ export default function ProductPage() {
                 />
               </Canvas>
             )}
+          </div>
+          
+          {/* Toggle between 3D and Image */}
+          <div className="mt-4 flex justify-center">
+            <button 
+              onClick={() => setUseFallbackImage(!useFallbackImage)}
+              className="px-4 py-2 bg-gray-200 rounded-md text-gray-800 hover:bg-gray-300 transition"
+            >
+              {useFallbackImage ? "View 3D Model" : "View Product Image"}
+            </button>
           </div>
         </div>
         
