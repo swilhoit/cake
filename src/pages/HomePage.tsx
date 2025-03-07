@@ -323,7 +323,7 @@ export default function HomePage() {
       </section>
       
       {/* Banh Mi Marquee Section with yellow background - Simplified to 1 line */}
-      <section className="py-8 bg-yellow-300 my-12 overflow-hidden">
+      <section className="py-4 bg-yellow-300 my-8 overflow-hidden">
         <h2 className="sr-only">Banh Mi Section</h2>
         
         {/* Marquee Container - Single line only */}
@@ -333,11 +333,11 @@ export default function HomePage() {
             {/* Reduced the number of repetitions to avoid "Too many WebGL contexts" error */}
             {[1, 2, 3, 4].map((item) => (
               <React.Fragment key={`banh-left-${item}`}>
-                <div className="h-40 w-40 mx-4">
+                <div className="h-32 w-32 mx-3">
                   <BanhMiModelSmall rotateRight={item % 2 === 0} />
                 </div>
-                <div className="flex items-center mx-4">
-                  <h3 className="text-5xl font-black text-black whitespace-nowrap font-rubik">
+                <div className="flex items-center mx-3">
+                  <h3 className="text-4xl font-black text-black whitespace-nowrap font-rubik">
                     WE HAVE BANH MIS!
                   </h3>
                 </div>
@@ -393,22 +393,27 @@ function BanhMiModelSmall({ rotateRight }: { rotateRight: boolean }) {
       frameloop="demand"
     >
       {/* Improved lighting setup */}
-      <ambientLight intensity={0.6} /> {/* Reduced ambient light intensity for better contrast */}
+      <ambientLight intensity={0.8} /> {/* Increased ambient light for better overall illumination */}
       <spotLight 
         position={[5, 10, 5]} 
         angle={0.4} 
         penumbra={1} 
-        intensity={1.5} 
+        intensity={2.5} // Increased intensity for brighter lighting
         castShadow 
-        color="#fff9e0" // Warm light color
+        color="#ffffff" // Pure white light for better illumination
       />
       <spotLight 
         position={[-5, 5, -5]} 
         angle={0.3} 
         penumbra={1} 
-        intensity={0.8} 
+        intensity={1.5} // Increased intensity for the fill light
         castShadow={false} 
-        color="#ffe0c0" // Secondary fill light with warm color
+        color="#fff9e0" // Warm fill light
+      />
+      <directionalLight // Added directional light for better definition
+        position={[0, 5, 5]}
+        intensity={1.2}
+        color="#ffffff"
       />
       
       {/* Using a separate component for the rotating model with error handling */}
@@ -444,7 +449,8 @@ function FallbackBanhMi({ rotateRight }: { rotateRight: boolean }) {
   useFrame((state) => {
     if (meshRef.current) {
       // Rotate either clockwise or counter-clockwise based on the prop
-      meshRef.current.rotation.y += rotateRight ? 0.03 : -0.03;
+      // Reduced rotation speed for a more natural look
+      meshRef.current.rotation.y += rotateRight ? 0.01 : -0.01;
       
       // Add a slight floating motion for visual interest
       const time = state.clock.getElapsedTime();
@@ -522,7 +528,8 @@ function RotatingModel({ url, rotateRight, onLoadFailed }: {
   useFrame((state) => {
     if (meshRef.current) {
       // Rotate either clockwise or counter-clockwise based on the prop
-      meshRef.current.rotation.y += rotateRight ? 0.03 : -0.03;
+      // Reduced rotation speed for a more natural look
+      meshRef.current.rotation.y += rotateRight ? 0.01 : -0.01;
       
       // Add a slight floating motion for visual interest
       const time = state.clock.getElapsedTime();
