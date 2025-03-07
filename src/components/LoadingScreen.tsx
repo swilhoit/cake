@@ -31,11 +31,12 @@ const LoadingScreen: React.FC = () => {
   if (!isLoading) return null;
   
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center" 
+    <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center" 
          style={{ 
-           background: 'linear-gradient(-45deg, rgba(250, 220, 245, 0.9), rgba(220, 245, 250, 0.9), rgba(220, 250, 230, 0.9), rgba(245, 250, 220, 0.9))',
+           background: 'linear-gradient(-45deg, rgba(250, 220, 245, 1), rgba(220, 245, 250, 1), rgba(220, 250, 230, 1), rgba(245, 250, 220, 1))',
            backgroundSize: '400% 400%',
-           animation: 'gradient 15s ease infinite'
+           animation: 'gradient 15s ease infinite',
+           backdropFilter: 'blur(5px)'
          }}>
       <div className="container max-w-md mx-auto px-4 text-center">
         <div className="mb-8">
