@@ -3,7 +3,7 @@ import { useShopContext } from '../context/ShopContext';
 import Model3D from '../components/Model3D';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Environment, Html, useGLTF } from '@react-three/drei';
-import { Suspense, useState, useEffect, useRef } from 'react';
+import { Suspense, useState, useEffect, useRef, ReactNode } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { getMainLoaderActive } from '../components/LoadingScreen';
@@ -279,55 +279,59 @@ function BanhMi3D({ rotationSpeed = 0.005, index }: { rotationSpeed: number; ind
   );
 }
 
-// Simplified BanhMi marquee with a React Three Fiber approach for better compatibility
+// BanhMi marquee with inline 3D models between text items
 function BanhMiMarquee() {
   const { isMobile } = getDeviceCapabilities();
   
   // Simplified BanhMi model component using react-three-fiber/drei
-  const BanhMiModel = () => {
+  const BanhMiModel = ({ index = 0 }: { index?: number }) => {
     const groupRef = useRef<THREE.Group>(null);
     const { scene } = useGLTF('https://storage.googleapis.com/kgbakerycakes/banhmi.glb');
     
     // Rotate the model on each frame
     useFrame(() => {
       if (groupRef.current) {
-        groupRef.current.rotation.y += 0.01;
+        // Alternate rotation direction based on index for visual variety
+        const direction = index % 2 === 0 ? 1 : -1;
+        groupRef.current.rotation.y += 0.01 * direction;
       }
     });
     
     // Return the model
     return (
-      <group ref={groupRef} scale={[1.5, 1.5, 1.5]}>
+      <group ref={groupRef} scale={[1.3, 1.3, 1.3]}>
         {scene && <primitive object={scene} />}
       </group>
     );
   };
   
+  // Create a component for the 3D model display
+  const BanhMiCanvas = ({ index }: { index: number }) => (
+    <div className="h-16 w-16 inline-block">
+      <Canvas
+        camera={{ position: [0, 0, 5], fov: 40 }}
+        dpr={1}
+        gl={{ preserveDrawingBuffer: true, powerPreference: isMobile ? 'low-power' : 'default' }}
+        frameloop="always"
+      >
+        <ambientLight intensity={0.8} />
+        <directionalLight intensity={0.5} position={[1, 1, 1]} />
+        <Suspense fallback={null}>
+          <BanhMiModel index={index} />
+        </Suspense>
+      </Canvas>
+    </div>
+  );
+  
   return (
-    <section className="w-full py-4 bg-yellow-300 overflow-hidden">
-      {/* 3D Model Display */}
-      <div className="container mx-auto h-40 relative mb-2">
-        <Canvas
-          camera={{ position: [0, 0, 5], fov: 40 }}
-          dpr={1}
-          gl={{ preserveDrawingBuffer: true, powerPreference: isMobile ? 'low-power' : 'default' }}
-          frameloop="always"
-        >
-          <ambientLight intensity={0.8} />
-          <directionalLight intensity={0.5} position={[1, 1, 1]} />
-          <Suspense fallback={null}>
-            <BanhMiModel />
-          </Suspense>
-        </Canvas>
-      </div>
-      
-      {/* Scrolling text marquee */}
-      <div className="relative w-full overflow-hidden">
-        <div className="flex items-center animate-marquee whitespace-nowrap py-2">
-          {Array.from({ length: 15 }).map((_, index) => (
-            <div className="flex items-center mx-8" key={`banh-item-${index}`}>
-              <span className="text-3xl font-bold text-black">WE HAVE BANH MIS!</span>
-              <span className="text-3xl mx-4">•</span>
+    <section className="w-screen h-16 bg-yellow-300 overflow-hidden -mx-[calc(50vw-50%)]">
+      {/* Single line marquee with integrated 3D models */}
+      <div className="relative w-full h-full overflow-hidden">
+        <div className="flex items-center animate-marquee whitespace-nowrap h-full">
+          {Array.from({ length: 10 }).map((_, index) => (
+            <div className="flex items-center" key={`banh-item-${index}`}>
+              <span className="text-2xl font-bold text-black mx-4">WE HAVE BANH MIS!</span>
+              <BanhMiCanvas index={index} />
             </div>
           ))}
         </div>
@@ -357,7 +361,8 @@ function AnimationStyles() {
       }
       
       .animate-marquee {
-        animation: marquee 20s linear infinite;
+        animation: marquee 25s linear infinite;
+        will-change: transform;
       }
       
       .animate-spin-slow {
@@ -420,44 +425,94 @@ export default function HomePage() {
     );
   }
 
+  // Create a staggered entrance animation for elements
+  const ElementAnimation = ({ children, delay, direction = 'bottom' }: { 
+    children: ReactNode, 
+    delay: number,
+    direction?: 'left' | 'right' | 'bottom' | 'top'
+  }) => {
+    const [isVisible, setIsVisible] = useState(false);
+    
+    useEffect(() => {
+      const timer = setTimeout(() => {
+        setIsVisible(true);
+      }, delay);
+      
+      return () => clearTimeout(timer);
+    }, [delay]);
+    
+    // Calculate transform based on direction
+    const getInitialTransform = () => {
+      switch (direction) {
+        case 'left': return 'translateX(-50px)';
+        case 'right': return 'translateX(50px)';
+        case 'top': return 'translateY(-50px)';
+        case 'bottom': 
+        default: return 'translateY(50px)';
+      }
+    };
+    
+    const style = {
+      transform: isVisible ? 'translate(0)' : getInitialTransform(),
+      opacity: isVisible ? 1 : 0,
+      transition: 'all 0.5s ease-out'
+    };
+    
+    return <div style={style}>{children}</div>;
+  };
+
   return (
-    <div className="container mx-auto px-4 py-8">
-      {/* Featured Cake removed */}
-      
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-800 text-center">Our Collection</h1>
-        <p className="text-gray-600 mt-2 text-center">
-          Browse our premium custom cakes and bakery items
-        </p>
-      </div>
-      
-      {/* Products Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {displayedProducts.slice(0, 6).map((product: any) => ( // Only show first 6 products
-          <ProductCard key={product.id} product={product} />
-        ))}
-      </div>
-      
-      {displayedProducts.length === 0 && (
-        <div className="text-center py-12">
-          <h2 className="text-xl text-gray-600">No products available</h2>
-          <p className="text-gray-500 mt-2">
-            Please check back later or contact us for more information.
-          </p>
+    <div className="overflow-x-hidden">
+      <div className="container mx-auto px-4 py-8">
+        {/* Featured Cake removed */}
+        
+        <ElementAnimation delay={100} direction="top">
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold text-gray-800 text-center">Our Collection</h1>
+            <p className="text-gray-600 mt-2 text-center">
+              Browse our premium custom cakes and bakery items
+            </p>
+          </div>
+        </ElementAnimation>
+        
+        {/* Products Grid with staggered animations */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {displayedProducts.slice(0, 6).map((product: any, index) => ( // Only show first 6 products
+            <ElementAnimation 
+              key={product.id} 
+              delay={150 + (index * 100)} 
+              direction={index % 2 === 0 ? 'left' : 'right'}
+            >
+              <ProductCard product={product} />
+            </ElementAnimation>
+          ))}
         </div>
-      )}
-      
-      {/* View all products button */}
-      <div className="text-center mt-12">
-        <Link 
-          to="/shop" 
-          className="inline-block bg-pink-500 text-white font-medium px-6 py-3 rounded-md hover:bg-pink-600 transition shadow-md"
-        >
-          View All Products
-        </Link>
+        
+        {displayedProducts.length === 0 && (
+          <ElementAnimation delay={100} direction="bottom">
+            <div className="text-center py-12">
+              <h2 className="text-xl text-gray-600">No products available</h2>
+              <p className="text-gray-500 mt-2">
+                Please check back later or contact us for more information.
+              </p>
+            </div>
+          </ElementAnimation>
+        )}
+        
+        {/* View all products button */}
+        <ElementAnimation delay={600} direction="bottom">
+          <div className="text-center mt-12 mb-12">
+            <Link 
+              to="/shop" 
+              className="inline-block bg-pink-500 text-white font-medium px-6 py-3 rounded-md hover:bg-pink-600 transition shadow-md"
+            >
+              View All Products
+            </Link>
+          </div>
+        </ElementAnimation>
       </div>
       
-      {/* Banh Mi Marquee */}
+      {/* Banh Mi Marquee - outside container for full width */}
       <BanhMiMarquee />
     </div>
   );
