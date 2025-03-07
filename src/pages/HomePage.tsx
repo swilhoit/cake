@@ -325,17 +325,17 @@ export default function HomePage() {
       </section>
       
       {/* Banh Mi Section */}
-      <section className="py-20 bg-yellow-300">
-        <div className="container mx-auto px-4">
+      <section className="py-24 bg-yellow-400 mx-8 my-12 rounded-3xl">
+        <div className="container mx-auto px-8">
           <div className="flex flex-col md:flex-row items-center justify-between">
-            <div className="md:w-1/2 mb-10 md:mb-0 text-center md:text-left">
-              <h2 className="text-5xl font-bold text-yellow-800 mb-6">We have Banh Mis!</h2>
-              <p className="text-xl text-yellow-700 mb-8">
+            <div className="md:w-1/2 mb-12 md:mb-0 text-center md:text-left">
+              <h2 className="text-6xl font-black text-black mb-8">We have Banh Mis!</h2>
+              <p className="text-2xl font-bold text-black mb-10">
                 Try our delicious, freshly made Vietnamese sandwiches with a variety of fillings.
               </p>
               <Link 
                 to="/shop" 
-                className="inline-block bg-yellow-500 hover:bg-yellow-600 text-white font-bold px-8 py-4 rounded-md transition shadow-md text-lg"
+                className="inline-block bg-black hover:bg-gray-800 text-yellow-400 font-bold px-10 py-5 rounded-xl transition shadow-lg text-xl"
               >
                 Order Now
               </Link>
@@ -436,10 +436,10 @@ function RotatingBanhMi() {
   // Load the Banh Mi 3D model
   const { scene } = useGLTF(modelUrl);
   
-  // Auto-rotation animation with increased speed
+  // Auto-rotation animation with even faster speed
   useFrame(() => {
     if (meshRef.current) {
-      meshRef.current.rotation.y += 0.015; // Faster rotation (3x original speed)
+      meshRef.current.rotation.y += 0.025; // Even faster rotation (5x original speed)
     }
   });
   
@@ -452,8 +452,8 @@ function RotatingBanhMi() {
   return (
     <mesh 
       ref={meshRef}
-      scale={[2.2, 2.2, 2.2]}  // Larger scale (was 1.5)
-      position={[0, -0.3, 0]}  // Adjusted position to compensate for larger size
+      scale={[2.2, 2.2, 2.2]}
+      position={[0, -0.3, 0]}
       rotation={[0.1, 0, 0]}
     >
       <primitive object={model} />
