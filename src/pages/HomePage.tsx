@@ -1,8 +1,8 @@
 import { Link } from 'react-router-dom';
-import { Suspense, useState, useEffect } from 'react';
+import { Suspense, useState, useEffect, useRef, useMemo } from 'react';
 import { useShopContext } from '../context/ShopContext';
-import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Environment, Html } from '@react-three/drei';
+import { Canvas, useFrame } from '@react-three/fiber';
+import { OrbitControls, Environment, Html, useGLTF } from '@react-three/drei';
 import Model3D from '../components/Model3D';
 import * as THREE from 'three';
 
@@ -323,6 +323,140 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+      
+      {/* Banh Mi Section */}
+      <section className="py-16 bg-yellow-100">
+        <div className="container mx-auto px-4">
+          <div className="flex flex-col md:flex-row items-center justify-between">
+            <div className="md:w-1/2 mb-8 md:mb-0 text-center md:text-left">
+              <h2 className="text-4xl font-bold text-yellow-800 mb-4">We have Banh Mis!</h2>
+              <p className="text-lg text-yellow-700 mb-6">
+                Try our delicious, freshly made Vietnamese sandwiches with a variety of fillings.
+              </p>
+              <Link 
+                to="/shop" 
+                className="inline-block bg-yellow-500 hover:bg-yellow-600 text-white font-medium px-6 py-3 rounded-md transition shadow-sm"
+              >
+                Order Now
+              </Link>
+            </div>
+            
+            <div className="md:w-1/2 h-80">
+              <BanhMiModel />
+            </div>
+          </div>
+        </div>
+      </section>
     </div>
+  );
+}
+
+// BanhMi Model component with rotating 3D model
+function BanhMiModel() {
+  const [isVisible, setIsVisible] = useState(false);
+  const [modelError, setModelError] = useState(false);
+  const { isMobile, dpr } = getDeviceCapabilities();
+  
+  // Only show the model after a delay to ensure initial mount is complete
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsVisible(true);
+    }, 100);
+    
+    return () => clearTimeout(timer);
+  }, []);
+  
+  return (
+    <div className="relative h-full w-full">
+      {isVisible && (
+        <Canvas
+          camera={{ position: [0, 0, 4.0], fov: 30 }}
+          dpr={dpr}
+          gl={{ 
+            antialias: true,
+            alpha: true,
+            preserveDrawingBuffer: true,
+            powerPreference: 'default',
+            depth: true
+          }}
+          className="!touch-none"
+          style={{ background: 'transparent' }}
+          onCreated={({ gl }) => {
+            // Set clear color with full transparency
+            gl.setClearColor(0x000000, 0);
+          }}
+        >
+          <ambientLight intensity={0.8} />
+          <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} intensity={1} castShadow />
+          
+          <Suspense fallback={
+            <Html center>
+              <div className="flex items-center justify-center">
+                <div className="text-sm text-yellow-800 px-3 py-2 rounded-full" style={{ background: 'transparent' }}>
+                  Loading Banh Mi model...
+                </div>
+              </div>
+            </Html>
+          }>
+            {!modelError ? (
+              <>
+                <RotatingBanhMi />
+                {!isMobile && <Environment preset="city" />}
+              </>
+            ) : (
+              <Html center>
+                <div className="flex items-center justify-center">
+                  <div className="text-sm text-red-500 px-3 py-2 rounded-full" style={{ background: 'transparent' }}>
+                    Failed to load model
+                  </div>
+                </div>
+              </Html>
+            )}
+          </Suspense>
+          
+          <OrbitControls
+            enableZoom={false}
+            maxPolarAngle={Math.PI / 2}
+            minPolarAngle={0}
+            rotateSpeed={0.5}
+            enableDamping={isMobile ? false : true}
+            dampingFactor={0.1}
+          />
+        </Canvas>
+      )}
+    </div>
+  );
+}
+
+// Rotating Banh Mi model
+function RotatingBanhMi() {
+  const meshRef = useRef<THREE.Mesh>(null);
+  const modelUrl = "https://storage.googleapis.com/kgbakerycakes/banhmi.glb";
+  
+  // Load the Banh Mi 3D model
+  const { scene } = useGLTF(modelUrl);
+  
+  // Auto-rotation animation
+  useFrame(() => {
+    if (meshRef.current) {
+      meshRef.current.rotation.y += 0.005; // Slow rotation
+    }
+  });
+  
+  // Clone the model to avoid conflicts
+  const model = useMemo(() => {
+    if (!scene) return new THREE.Group();
+    return scene.clone();
+  }, [scene]);
+  
+  return (
+    <mesh 
+      ref={meshRef}
+      scale={[1.5, 1.5, 1.5]}
+      position={[0, -0.5, 0]}
+      rotation={[0.1, 0, 0]}
+    >
+      <primitive object={model} />
+    </mesh>
   );
 } 
