@@ -1,25 +1,31 @@
-# Local 3D Models for Development
+# Development 3D Model Files
 
-This directory contains local copies of 3D models for development purposes.
+This directory is for storing local copies of 3D model files (.glb) for **development purposes only**.
 
-When developing locally, CORS issues may prevent loading models directly from Google Cloud Storage. 
-The application is configured to look for models in this directory when running in development mode.
+## Usage During Development
 
-## Model Naming
+When working on the application locally, you can place GLB models in this directory to allow convenient 
+testing without needing to access cloud storage. The models here will **not** be used as fallbacks in production.
 
-To make a model available locally, place the `.glb` file in this directory with the exact same filename
-as the one referenced in the application. For example:
+The development tooling is designed to recognize when you're working in a local environment 
+(`localhost` or `127.0.0.1`) and will prioritize loading from Google Cloud Storage.
 
-- strawberry.glb
-- nemo.glb
-- princess.glb
-- spongebob1.glb
-- turkey.glb
+## Model File Requirements
 
-## How It Works
+1. Use the exact same filenames as in your Google Cloud Storage bucket
+2. Only use GLB format files
+3. Keep models optimized for web (smaller file size)
 
-When the application detects it's running in a development environment (localhost), 
-it will first attempt to load models from Google Cloud Storage. If that fails due to CORS issues,
-it will automatically fall back to checking for a local copy in this directory.
+## Supported Models
 
-No code changes are required - just place the models here and the app will find them. 
+Place models with these exact filenames:
+
+- `nemo.glb`
+- `strawberry.glb`
+- `princess.glb`
+- `spongebob1.glb`
+- `turkey.glb`
+
+## Important Note
+
+The production application ONLY uses models from Google Cloud Storage. This directory is solely to make development and testing more efficient. 
