@@ -111,15 +111,12 @@ const getDeviceCapabilities = (): { isMobile: boolean, shouldUseImages: boolean,
   const deviceMemory = (navigator as any).deviceMemory || 0;
   
   // Determine if we should use images instead of 3D models based on device capability
-  // Being more conservative to prevent WebGL context issues
+  // No longer force images in production environment - use device capability checks instead
   const shouldUseImages = 
-    // Force images in production environment to avoid WebGL context issues
-    window.location.hostname.includes('vercel.app') ||
-    // Be conservative with mobile devices
-    isMobile || 
-    // Be conservative with low-end devices
-    cpuCores < 6 || 
-    deviceMemory < 4;
+    // Be conservative with mobile devices with low specs
+    (isMobile && (cpuCores < 4 || deviceMemory < 2)) || 
+    // Be conservative with low-end desktop devices
+    (!isMobile && (cpuCores < 4 || deviceMemory < 2));
   
   // Set appropriate device pixel ratio based on device capability
   const dpr: [number, number] = isMobile ? [1, 1.5] : [1, 2];
@@ -148,8 +145,8 @@ function ProductCard({ product }: { product: any }) {
     }
     
     // Only show the model after a delay to ensure initial mount is complete
-    // Longer delay on mobile to allow UI to initialize first
-    const delay = isMobile ? 300 : 100;
+    // Shorter delay to show models faster
+    const delay = isMobile ? 200 : 50;
     
     const timer = setTimeout(() => {
       setIsVisible(true);
@@ -162,12 +159,6 @@ function ProductCard({ product }: { product: any }) {
   const handleModelError = () => {
     console.log(`Model error for product ${productId}, retry: ${retryCount}`);
     setModelError(true);
-    
-    // Fall back to image immediately in production
-    if (window.location.hostname.includes('vercel.app')) {
-      setUseFallbackImage(true);
-      return;
-    }
     
     // Try up to 2 times to reload the model with increasing delays
     if (retryCount < 2) {
@@ -339,8 +330,8 @@ export default function HomePage() {
         <div className="marquee-container relative w-full">
           {/* Single Marquee - Left to Right - FASTER speed - Reduced number of models */}
           <div className="marquee-content flex animate-marquee-fast">
-            {/* Reduced the number of repetitions to prevent WebGL context issues */}
-            {[1, 2, 3].map((item) => (
+            {/* Further reduced the number of repetitions to prevent WebGL context issues */}
+            {[1, 2].map((item) => (
               <React.Fragment key={`banh-left-${item}`}>
                 <div className="h-32 w-32 mx-2">
                   <BanhMiModelSmall rotateRight={item % 2 === 0} />
@@ -372,12 +363,12 @@ function BanhMiModelSmall({ rotateRight }: { rotateRight: boolean }) {
     setModelError(true);
     
     // Implement retry logic with short delays
-    if (retryCount < 3) {
+    if (retryCount < 2) { // Reduce retry count to avoid too many WebGL contexts
       const delay = 500 * (retryCount + 1);
-      console.log(`Retrying BanhMi model in ${delay}ms (attempt ${retryCount + 1}/3)`);
+      console.log(`Retrying BanhMi model in ${delay}ms (attempt ${retryCount + 1}/2)`);
       
       setTimeout(() => {
-        console.log(`Retrying BanhMi model now (attempt ${retryCount + 1}/3)`);
+        console.log(`Retrying BanhMi model now (attempt ${retryCount + 1}/2)`);
         setModelError(false);
         setRetryCount(prev => prev + 1);
       }, delay);
@@ -451,7 +442,7 @@ function FallbackBanhMi({ rotateRight }: { rotateRight: boolean }) {
   
   // Generate a random warm bread-like color - use useState for stable values
   const [color] = useState(() => {
-    const hue = 20 + Math.random() * 30; // Range from orange-red to yellow-orange
+    const hue = 30 + Math.random() * 20; // Range from orange-yellow to light brown
     const saturation = 80 + Math.random() * 20; // High saturation
     const lightness = 55 + Math.random() * 15; // Medium-high lightness
     return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
@@ -469,7 +460,7 @@ function FallbackBanhMi({ rotateRight }: { rotateRight: boolean }) {
     }
   });
   
-  // Create a bread-like shape using multiple geometries
+  // Create a banh mi-like shape using multiple geometries
   return (
     <group 
       ref={meshRef as any}
@@ -486,6 +477,17 @@ function FallbackBanhMi({ rotateRight }: { rotateRight: boolean }) {
       <mesh position={[0, 0.3, 0]} scale={[1.7, 0.4, 0.65]}>
         <sphereGeometry args={[0.5, 16, 16, 0, Math.PI * 2, 0, Math.PI * 0.5]} />
         <meshStandardMaterial color={color} roughness={0.7} metalness={0.1} />
+      </mesh>
+      
+      {/* Add some colorful "filling" to make it look like a banh mi */}
+      <mesh position={[0, 0.05, -0.1]} rotation={[0.2, 0, 0]} scale={[1.6, 0.15, 0.4]}>
+        <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial color="#4CAF50" roughness={0.9} metalness={0.1} /> {/* Green for lettuce/cilantro */}
+      </mesh>
+      
+      <mesh position={[0, 0.2, -0.05]} rotation={[0.1, 0, 0]} scale={[1.5, 0.1, 0.3]}>
+        <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial color="#F44336" roughness={0.9} metalness={0.1} /> {/* Red for meat/pepper */}
       </mesh>
     </group>
   );

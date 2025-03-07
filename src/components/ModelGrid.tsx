@@ -68,14 +68,18 @@ function ProductCard({ product }: { product: typeof products[0] }) {
   const [modelError, setModelError] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
   
+  // Check if running in a production environment
+  const isProduction = typeof window !== 'undefined' && 
+                      window.location.hostname.includes('vercel.app');
+  
   // Only show the model after a short delay to ensure initial mount is complete
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsVisible(true);
-    }, 100);
+    }, isProduction ? 200 : 100); // Give more time in production
     
     return () => clearTimeout(timer);
-  }, []);
+  }, [isProduction]);
   
   return (
     <div className="backdrop-blur-sm overflow-hidden flex flex-col rounded-lg transition-all duration-300 hover:shadow-lg">
@@ -84,7 +88,7 @@ function ProductCard({ product }: { product: typeof products[0] }) {
         {isVisible && (
           <Canvas
             camera={{ position: [0, 0, 4.0], fov: 30 }}
-            dpr={[1, 2]}
+            dpr={[1, 1.5]} // Reduced DPR for better performance
             gl={{ 
               antialias: true,
               alpha: true,
@@ -140,11 +144,33 @@ function ProductCard({ product }: { product: typeof products[0] }) {
 
 // Main component
 export default function ModelGrid() {
+  // Limit the number of products shown to prevent WebGL context issues
+  const [visibleProducts, setVisibleProducts] = useState<typeof products>([]);
+  
+  useEffect(() => {
+    // In production, show fewer products initially to prevent WebGL context issues
+    const isProduction = typeof window !== 'undefined' && 
+                        window.location.hostname.includes('vercel.app');
+    
+    // Show 8 products in production, all 16 in development
+    const initialCount = isProduction ? 8 : 16;
+    setVisibleProducts(products.slice(0, initialCount));
+    
+    // If in production, load the rest after a delay
+    if (isProduction && products.length > initialCount) {
+      const timer = setTimeout(() => {
+        setVisibleProducts(products);
+      }, 2000); // Load the rest after 2 seconds
+      
+      return () => clearTimeout(timer);
+    }
+  }, []);
+  
   return (
     <div className="container mx-auto px-4 py-8">
       {/* Product grid with individual 3D models */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {products.map(product => (
+        {visibleProducts.map(product => (
           <ProductCard key={product.id} product={product} />
         ))}
       </div>
