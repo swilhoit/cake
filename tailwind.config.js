@@ -14,6 +14,8 @@ export default {
         'gradient': 'gradient 15s ease infinite',
         'marquee': 'marquee 25s linear infinite',
         'marquee-reverse': 'marquee-reverse 25s linear infinite',
+        'marquee-fast': 'marquee 8s linear infinite',
+        'marquee-reverse-fast': 'marquee-reverse 8s linear infinite',
       },
       keyframes: {
         gradient: {

@@ -5,6 +5,7 @@ import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Environment, Html, useGLTF } from '@react-three/drei';
 import Model3D from '../components/Model3D';
 import * as THREE from 'three';
+import React from 'react';
 
 // Mock product data for when Shopify products aren't available
 export const mockProducts = [
@@ -324,29 +325,43 @@ export default function HomePage() {
         </div>
       </section>
       
-      {/* Banh Mi Marquee Section - No background */}
-      <section className="py-8 my-12 overflow-hidden">
+      {/* Banh Mi Marquee Section with yellow background */}
+      <section className="py-8 bg-yellow-300 my-12 overflow-hidden">
         <h2 className="sr-only">Banh Mi Section</h2>
         
         {/* Marquee Container */}
         <div className="marquee-container relative w-full">
-          {/* First Marquee - Left to Right - Models only, no text */}
-          <div className="marquee-content flex animate-marquee">
-            {/* Repeat the models multiple times to ensure continuous scrolling */}
-            {[1, 2, 3, 4, 5, 6, 7, 8].map((item) => (
-              <div key={`banh-left-${item}`} className="h-40 w-40 mx-6">
-                <BanhMiModelSmall rotateRight={true} />
-              </div>
+          {/* First Marquee - Left to Right - FASTER speed */}
+          <div className="marquee-content flex animate-marquee-fast">
+            {/* Repeat the content multiple times alternating model and text */}
+            {[1, 2, 3, 4, 5, 6].map((item) => (
+              <React.Fragment key={`banh-left-${item}`}>
+                <div className="h-40 w-40 mx-4">
+                  <BanhMiModelSmall rotateRight={true} />
+                </div>
+                <div className="flex items-center mx-4">
+                  <h3 className="text-5xl font-black text-black whitespace-nowrap font-playfair">
+                    WE HAVE BANH MIS!
+                  </h3>
+                </div>
+              </React.Fragment>
             ))}
           </div>
           
-          {/* Second Marquee - Right to Left (reversed) - Models only, no text */}
-          <div className="marquee-content flex animate-marquee-reverse mt-4">
-            {/* Repeat the models multiple times in reverse */}
-            {[1, 2, 3, 4, 5, 6, 7, 8].map((item) => (
-              <div key={`banh-right-${item}`} className="h-40 w-40 mx-6">
-                <BanhMiModelSmall rotateRight={false} />
-              </div>
+          {/* Second Marquee - Right to Left (reversed) - FASTER speed */}
+          <div className="marquee-content flex animate-marquee-reverse-fast mt-8">
+            {/* Repeat the content multiple times alternating text and model */}
+            {[1, 2, 3, 4, 5, 6].map((item) => (
+              <React.Fragment key={`banh-right-${item}`}>
+                <div className="flex items-center mx-4">
+                  <h3 className="text-5xl font-black text-black whitespace-nowrap font-playfair">
+                    WE HAVE BANH MIS!
+                  </h3>
+                </div>
+                <div className="h-40 w-40 mx-4">
+                  <BanhMiModelSmall rotateRight={false} />
+                </div>
+              </React.Fragment>
             ))}
           </div>
         </div>
@@ -355,7 +370,7 @@ export default function HomePage() {
         <div className="text-center mt-8 mb-4">
           <Link 
             to="/shop" 
-            className="inline-block bg-transparent hover:bg-black hover:text-white border-2 border-black font-bold px-10 py-4 rounded-full transition duration-300 text-xl font-rubik"
+            className="inline-block bg-black hover:bg-black/80 text-yellow-400 font-bold px-10 py-4 rounded-full transition duration-300 text-xl font-rubik"
           >
             Order Banh Mi
           </Link>
