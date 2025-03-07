@@ -184,7 +184,6 @@ function ProductCard({ product }: { product: any }) {
                     scale={1.3} 
                     rotationSpeed={isMobile ? 0.003 : 0.005} 
                     productId={productId} 
-                    onError={handleModelError}
                   />
                   {!isMobile && <Environment preset="city" />}
                 </>
