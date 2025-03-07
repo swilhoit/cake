@@ -162,44 +162,68 @@ function ModelContent({
   // State to track if model is loaded and store the model
   const [model, setModel] = useState<THREE.Group | null>(null);
   const [modelError, setModelError] = useState<string | null>(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   
   // Load the model with regular THREE.js GLTFLoader
   useEffect(() => {
     let isMounted = true;
     const loader = createGLTFLoader();
     
-    console.log(`Loading model from URL: ${modelUrl}`);
+    console.log(`[${idNumber}] Loading model from URL: ${modelUrl}, attempt ${loadAttempt + 1}`);
     
-    loader.load(
-      modelUrl,
-      (gltf) => {
-        if (isMounted) {
-          // Successfully loaded the model
-          console.log(`Successfully loaded model: ${variantName}`);
-          setModel(gltf.scene.clone());
-          onLoad();
+    // Add a small random delay to stagger loading and prevent overloading
+    const startLoading = () => {
+      loader.load(
+        modelUrl,
+        (gltf) => {
+          if (isMounted) {
+            // Successfully loaded the model
+            console.log(`[${idNumber}] Successfully loaded model: ${variantName}`);
+            try {
+              const clonedScene = gltf.scene.clone();
+              setModel(clonedScene);
+              onLoad();
+            } catch (err) {
+              console.error(`[${idNumber}] Error cloning model:`, err);
+              onError(`Failed to process model: ${err}`);
+            }
+          }
+        },
+        (progress) => {
+          if (progress.lengthComputable && isMounted) {
+            const percent = Math.round((progress.loaded / progress.total) * 100);
+            console.log(`[${idNumber}] Loading ${modelUrl}: ${percent}%`);
+          }
+        },
+        (error: any) => {
+          if (isMounted) {
+            const errorMsg = error.message || String(error);
+            console.error(`[${idNumber}] Error loading model: ${errorMsg}`);
+            setModelError(errorMsg);
+            onError(`Failed to load model: ${errorMsg}`);
+            
+            // Retry loading after a delay if this isn't our final attempt
+            if (loadAttempt < 3) {
+              setTimeout(() => {
+                if (isMounted) {
+                  setLoadAttempt(prev => prev + 1);
+                }
+              }, 1000);
+            }
+          }
         }
-      },
-      (progress) => {
-        if (progress.lengthComputable) {
-          const percent = Math.round((progress.loaded / progress.total) * 100);
-          console.log(`Loading ${modelUrl}: ${percent}%`);
-        }
-      },
-      (error: any) => {
-        if (isMounted) {
-          const errorMsg = error.message || String(error);
-          console.error(`Error loading model: ${errorMsg}`);
-          setModelError(errorMsg);
-          onError(`Failed to load model: ${errorMsg}`);
-        }
-      }
-    );
+      );
+    };
+    
+    // Add a short random delay to prevent all models loading simultaneously
+    const delay = Math.random() * 200;
+    const timer = setTimeout(startLoading, delay);
     
     return () => {
       isMounted = false;
+      clearTimeout(timer);
     };
-  }, [modelUrl, onError, onLoad, variantName]);
+  }, [modelUrl, onError, onLoad, variantName, idNumber, loadAttempt]);
   
   // Handle rotation animation
   useFrame(() => {
@@ -208,8 +232,8 @@ function ModelContent({
     }
   });
   
-  // Show error state
-  if (modelError) {
+  // Show error state after multiple failed attempts
+  if (modelError && loadAttempt >= 3) {
     return <ModelError message={modelError} />;
   }
   

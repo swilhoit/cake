@@ -177,7 +177,7 @@ function ModelLoadingFallback() {
 // Product card with 3D model
 function ProductCard({ product }: { product: any }) {
   const { addToCart } = useShopContext();
-  const [isVisible, setIsVisible] = useState(false);
+  const [isVisible, setIsVisible] = useState(true); // Always start visible
   const [modelError, setModelError] = useState(false);
   const [useFallbackImage, setUseFallbackImage] = useState(false); // Never use fallback by default
   const { isMobile, shouldUseImages, dpr } = getDeviceCapabilities();
@@ -187,7 +187,7 @@ function ProductCard({ product }: { product: any }) {
   const [scaleValue, setScaleValue] = useState(1.3);
   const [containerScale, setContainerScale] = useState(1);
   const [rotationSpeed, setRotationSpeed] = useState(isMobile ? 0.003 : 0.005);
-  const [inViewport, setInViewport] = useState(false);
+  const [inViewport, setInViewport] = useState(true); // Always start in viewport
   const [modelReady, setModelReady] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -202,7 +202,7 @@ function ProductCard({ product }: { product: any }) {
     const observer = new IntersectionObserver(
       (entries) => {
         // Only set to visible if actually in viewport AND we can create a context
-        if (entries[0].isIntersecting && WebGLContextManager.canCreateContext()) {
+        if (entries[0].isIntersecting) {
           setInViewport(true);
         } else {
           setInViewport(false);
@@ -220,36 +220,12 @@ function ProductCard({ product }: { product: any }) {
     };
   }, []);
 
-  // For 3D model loading - always try to load models with a staggered delay
+  // For 3D model loading - simplified to always show
   useEffect(() => {
-    // Only load if in viewport and WebGL context is available
-    if (!inViewport) return;
-    
-    if (!WebGLContextManager.canCreateContext()) {
-      console.warn("Cannot create WebGL context for product", productId);
-      return;
-    }
-    
-    // Stagger the loading based on product ID
-    // This prevents all models from loading simultaneously
-    const staggerDelay = Math.min(200, productId * 50);
-    const timer = setTimeout(() => {
-      console.log(`Showing model for product ${productId} after stagger delay`);
-      setIsVisible(true);
-    }, staggerDelay);
-    
-    return () => clearTimeout(timer);
-  }, [inViewport, productId]);
-
-  // Clean up when component unmounts or is not in viewport
-  useEffect(() => {
-    return () => {
-      if (!inViewport && isVisible) {
-        console.log(`Hiding model for product ${productId} - no longer in viewport`);
-        setIsVisible(false);
-      }
-    };
-  }, [inViewport, isVisible, productId]);
+    // Always try to show models
+    console.log(`Setting model visible for product ${productId}`);
+    setIsVisible(true);
+  }, [productId]);
 
   // Handle model loading complete
   const handleModelLoaded = useCallback(() => {
@@ -258,68 +234,20 @@ function ProductCard({ product }: { product: any }) {
     setModelError(false);
   }, [productId]);
 
-  // Smooth transition for scale and rotation values using useSpring-like approach
-  useEffect(() => {
-    // Only run animations if actually in viewport
-    if (!inViewport || !modelReady) return;
-    
-    let frameId: number;
-    const targetScale = isHovered ? 2.0 : 1.3;
-    const targetContainerScale = isHovered ? 1.2 : 1;
-    const targetRotationSpeed = isHovered ? 0.01 : (isMobile ? 0.003 : 0.005);
-    const duration = 600; // ms
-    const startTime = performance.now();
-    const startScale = scaleValue;
-    const startContainerScale = containerScale;
-    const startRotationSpeed = rotationSpeed;
-    
-    const animate = (currentTime: number) => {
-      const elapsedTime = currentTime - startTime;
-      const progress = Math.min(elapsedTime / duration, 1);
-      
-      // Cubic bezier easing function (ease-out-cubic)
-      const eased = 1 - Math.pow(1 - progress, 3);
-      
-      // Interpolate between start and target values
-      const newScale = startScale + (targetScale - startScale) * eased;
-      const newContainerScale = startContainerScale + (targetContainerScale - startContainerScale) * eased;
-      const newRotationSpeed = startRotationSpeed + (targetRotationSpeed - startRotationSpeed) * eased;
-      
-      setScaleValue(newScale);
-      setContainerScale(newContainerScale);
-      setRotationSpeed(newRotationSpeed);
-      
-      if (progress < 1) {
-        frameId = requestAnimationFrame(animate);
-      }
-    };
-    
-    frameId = requestAnimationFrame(animate);
-    
-    return () => cancelAnimationFrame(frameId);
-  }, [isHovered, isMobile, inViewport, modelReady]);
-
   // Handle 3D model error with retry mechanism
-  const handleModelError = () => {
+  const handleModelError = useCallback(() => {
     console.log(`Model error for product ${productId}. Retrying...`);
     setModelError(true);
     
     // Keep retrying without giving up
-    if (retryCount < 3) {
+    if (retryCount < 5) {
       setTimeout(() => {
         setModelError(false);
         setRetryCount(prev => prev + 1);
       }, 500 * (retryCount + 1));
     }
     // Never fall back to images, just keep trying or show error
-  };
-
-  // Handle adding to cart
-  const handleAddToCart = () => {
-    if (product) {
-      addToCart(product.variants[0], 1);
-    }
-  };
+  }, [productId, retryCount]);
 
   // Get appropriate fallback image URL (only for error placeholders)
   const getFallbackImageUrl = () => {
@@ -358,7 +286,7 @@ function ProductCard({ product }: { product: any }) {
           className="w-full h-full object-contain transition-transform duration-500 ease-out"
           style={{ transform: `scale(${isHovered ? 1.5 : 1})` }}
         />
-      ) : inViewport && isVisible && (
+      ) : (
         <Canvas
           ref={canvasRef}
           camera={{ position: [0, 0, 4.0], fov: 30 }}
