@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Suspense, useState, useEffect, useRef, useMemo } from 'react';
+import { Suspense, useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useShopContext } from '../context/ShopContext';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Environment, Html, useGLTF } from '@react-three/drei';
@@ -355,7 +355,17 @@ export default function HomePage() {
 
 // Smaller Banh Mi model optimized for the marquee
 function BanhMiModelSmall({ rotateRight }: { rotateRight: boolean }) {
-  const modelUrl = "https://storage.googleapis.com/kgbakerycakes/banhmi.glb";
+  // Check if we're in production environment
+  const isProduction = typeof window !== 'undefined' && 
+    (window.location.hostname.includes('vercel.app') || window.location.hostname !== 'localhost');
+  
+  // State to track whether to use fallback
+  const [useFallback, setUseFallback] = useState(isProduction);
+  
+  // Don't try to load models in production due to CORS issues
+  const modelUrl = useFallback 
+    ? "" // Empty URL - we'll use a fallback box instead in production
+    : "https://storage.googleapis.com/kgbakerycakes/banhmi.glb";
   
   return (
     <Canvas
@@ -372,6 +382,10 @@ function BanhMiModelSmall({ rotateRight }: { rotateRight: boolean }) {
       onCreated={({ gl }) => {
         // Set clear color with full transparency
         gl.setClearColor(0x000000, 0);
+      }}
+      onError={() => {
+        console.error("Canvas error occurred");
+        setUseFallback(true);
       }}
     >
       {/* Improved lighting setup */}
@@ -393,18 +407,33 @@ function BanhMiModelSmall({ rotateRight }: { rotateRight: boolean }) {
         color="#ffe0c0" // Secondary fill light with warm color
       />
       
-      {/* Using a separate component for the rotating model */}
-      <RotatingModel url={modelUrl} rotateRight={rotateRight} />
+      {/* Using a separate component for the rotating model with error handling */}
+      <Suspense fallback={null}>
+        {useFallback ? (
+          <FallbackBanhMi rotateRight={rotateRight} />
+        ) : (
+          <RotatingModel 
+            url={modelUrl} 
+            rotateRight={rotateRight} 
+            onLoadFailed={() => setUseFallback(true)} 
+          />
+        )}
+      </Suspense>
     </Canvas>
   );
 }
 
-// Separate component for the rotating model that uses the useFrame hook - No text
-function RotatingModel({ url, rotateRight }: { url: string, rotateRight: boolean }) {
+// Fallback model for production where CORS prevents loading external models
+function FallbackBanhMi({ rotateRight }: { rotateRight: boolean }) {
   const meshRef = useRef<THREE.Mesh>(null);
   
-  // Load the 3D model
-  const { scene } = useGLTF(url);
+  // Generate a random warm bread-like color
+  const [color] = useState(() => {
+    const hue = 20 + Math.random() * 30; // Range from orange-red to yellow-orange
+    const saturation = 80 + Math.random() * 20; // High saturation
+    const lightness = 55 + Math.random() * 15; // Medium-high lightness
+    return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+  });
   
   // Auto-rotation animation with specified direction
   useFrame((state) => {
@@ -418,14 +447,89 @@ function RotatingModel({ url, rotateRight }: { url: string, rotateRight: boolean
     }
   });
   
-  // Get a random color for visual differentiation
-  const color = useMemo(() => {
+  // Create a bread-like shape using multiple geometries
+  return (
+    <group 
+      ref={meshRef}
+      position={[0, -0.2, 0]}
+      rotation={[0.1, 0, 0]}
+    >
+      {/* Bread loaf base */}
+      <mesh position={[0, 0, 0]} scale={[1.8, 0.6, 0.7]}>
+        <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial color={color} roughness={0.8} metalness={0.1} />
+      </mesh>
+      
+      {/* Rounded top of bread */}
+      <mesh position={[0, 0.3, 0]} scale={[1.7, 0.4, 0.65]}>
+        <sphereGeometry args={[0.5, 16, 16, 0, Math.PI * 2, 0, Math.PI * 0.5]} />
+        <meshStandardMaterial color={color} roughness={0.7} metalness={0.1} />
+      </mesh>
+    </group>
+  );
+}
+
+// Separate component for the rotating model that uses the useFrame hook - No text
+function RotatingModel({ url, rotateRight, onLoadFailed }: { 
+  url: string, 
+  rotateRight: boolean,
+  onLoadFailed: () => void
+}) {
+  const meshRef = useRef<THREE.Mesh>(null);
+  const [modelLoaded, setModelLoaded] = useState(false);
+  const [colorValue] = useState(() => {
     // Generate a random warm color for each Banh Mi to make them look distinct
-    const hue = 20 + Math.random() * 30; // Range from orange-red to yellow-orange
-    const saturation = 80 + Math.random() * 20; // High saturation
-    const lightness = 55 + Math.random() * 15; // Medium-high lightness
+    const hue = 20 + Math.random() * 30; 
+    const saturation = 80 + Math.random() * 20;
+    const lightness = 55 + Math.random() * 15;
     return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
-  }, []);
+  });
+  
+  // Set up error handling
+  const handleError = useCallback((error: any) => {
+    console.error("Failed to load model:", error);
+    onLoadFailed();
+  }, [onLoadFailed]);
+  
+  // Load the 3D model with error handling
+  const { scene } = useGLTF(url);
+  
+  // Handle errors through useEffect monitoring
+  useEffect(() => {
+    if (!scene) {
+      console.error("Error loading model: scene is undefined");
+      onLoadFailed();
+    } else {
+      console.log("Model loaded successfully:", url);
+      setModelLoaded(true);
+    }
+  }, [scene, url, onLoadFailed]);
+  
+  // Auto-rotation animation with specified direction
+  useFrame((state) => {
+    if (meshRef.current) {
+      // Rotate either clockwise or counter-clockwise based on the prop
+      meshRef.current.rotation.y += rotateRight ? 0.03 : -0.03;
+      
+      // Add a slight floating motion for visual interest
+      const time = state.clock.getElapsedTime();
+      meshRef.current.position.y = -0.2 + Math.sin(time * 0.8) * 0.05;
+    }
+  });
+  
+  // No model loaded yet or error occurred
+  if (!scene || !modelLoaded) {
+    // Return a fallback colored box
+    return (
+      <mesh
+        scale={[1.0, 0.6, 0.3]}
+        position={[0, -0.2, 0]}
+      >
+        <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial color={colorValue} />
+      </mesh>
+    );
+  }
   
   // Clone the model to avoid conflicts
   const model = useMemo(() => {
@@ -440,7 +544,7 @@ function RotatingModel({ url, rotateRight }: { url: string, rotateRight: boolean
             const newMat = mat.clone();
             // Apply a subtle tint
             if (newMat.color) {
-              const threeColor = new THREE.Color(color);
+              const threeColor = new THREE.Color(colorValue);
               newMat.color.lerp(threeColor, 0.3);
             }
             return newMat;
@@ -448,7 +552,7 @@ function RotatingModel({ url, rotateRight }: { url: string, rotateRight: boolean
         } else {
           const newMat = child.material.clone();
           if (newMat.color) {
-            const threeColor = new THREE.Color(color);
+            const threeColor = new THREE.Color(colorValue);
             newMat.color.lerp(threeColor, 0.3);
           }
           child.material = newMat;
@@ -457,16 +561,7 @@ function RotatingModel({ url, rotateRight }: { url: string, rotateRight: boolean
     });
     
     return clonedScene;
-  }, [scene, color]);
-  
-  // Log model status
-  useEffect(() => {
-    if (!scene) {
-      console.error("Failed to load Banh Mi model:", url);
-    } else {
-      console.log("Successfully loaded Banh Mi model:", url);
-    }
-  }, [scene, url]);
+  }, [scene, colorValue]);
   
   return (
     <mesh 
