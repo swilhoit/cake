@@ -1,10 +1,11 @@
 import { Link } from 'react-router-dom';
 import { useShopContext } from '../context/ShopContext';
 import Model3D from '../components/Model3D';
-import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Environment, Html } from '@react-three/drei';
+import { Canvas, useFrame } from '@react-three/fiber';
+import { OrbitControls, Environment, Html, useGLTF } from '@react-three/drei';
 import { Suspense, useState, useEffect, useRef } from 'react';
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { getMainLoaderActive } from '../components/LoadingScreen';
 
 // Mock product data for when Shopify products aren't available
@@ -111,132 +112,6 @@ function ModelLoadingFallback() {
   );
 }
 
-// Featured cake section
-function FeaturedCake({ product }: { product: any }) {
-  const { isMobile, shouldUseImages, dpr } = getDeviceCapabilities();
-  const [isVisible, setIsVisible] = useState(false);
-  const [modelError, setModelError] = useState(false);
-  
-  // Extract product ID from the Shopify handle
-  const productId = parseInt(product.id.split('/').pop() || '1', 10);
-  
-  // Show model with improved timing 
-  useEffect(() => {
-    // Start with longer delay to ensure UI is ready
-    const initialDelay = isMobile ? 500 : 300;
-    
-    // Set up visibility check to ensure we only show when page is ready
-    const checkVisibilityAndLoad = () => {
-      // Check if main loader is gone
-      if (!getMainLoaderActive()) {
-        // Additional delay after loader disappears
-        setTimeout(() => {
-          setIsVisible(true);
-          console.log("Featured cake model visible");
-        }, 200);
-      } else {
-        // Check again in a bit
-        setTimeout(checkVisibilityAndLoad, 100);
-      }
-    };
-    
-    // Initial timeout before checking
-    const timer = setTimeout(checkVisibilityAndLoad, initialDelay);
-    
-    return () => clearTimeout(timer);
-  }, [isMobile]);
-  
-  // Handle 3D model error
-  const handleModelError = () => {
-    console.error(`Featured model error for product ${productId}`);
-    setModelError(true);
-  };
-  
-  return (
-    <section className="py-8 my-4">
-      <div className="bg-gray-50 rounded-xl shadow-lg overflow-hidden">
-        <div className="container mx-auto px-4 py-8">
-          <h2 className="text-3xl font-bold mb-6 text-center text-gray-800">Featured Cake</h2>
-          <div className="flex flex-col md:flex-row items-center">
-            {/* 3D Model Display */}
-            <div className="md:w-1/2 h-80 relative mb-6 md:mb-0">
-              <div className="w-full h-full">
-                {isVisible && (
-                  <Canvas
-                    camera={{ position: [0, 0, 4.0], fov: 30 }}
-                    dpr={dpr}
-                    className="!touch-none" 
-                    frameloop={isMobile ? "demand" : "always"}
-                    onCreated={({ gl }) => {
-                      gl.setClearColor(new THREE.Color('#f8f9fa'), 0);
-                      if ('physicallyCorrectLights' in gl) {
-                        (gl as any).physicallyCorrectLights = true;
-                      }
-                      if (isMobile) {
-                        gl.shadowMap.enabled = false;
-                        if ('powerPreference' in gl) {
-                          (gl as any).powerPreference = "low-power";
-                        }
-                      }
-                    }}
-                    onError={handleModelError}
-                  >
-                    <ambientLight intensity={0.8} />
-                    <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} intensity={1} castShadow={!isMobile} />
-                    
-                    <Suspense fallback={<ModelLoadingFallback />}>
-                      {!modelError ? (
-                        <>
-                          <Model3D 
-                            scale={1.3} 
-                            rotationSpeed={0.003} 
-                            productId={productId} 
-                          />
-                          {!isMobile && <Environment preset="city" />}
-                        </>
-                      ) : (
-                        <Html center>
-                          <div className="flex items-center justify-center">
-                            <div className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-full">
-                              Failed to load featured model
-                            </div>
-                          </div>
-                        </Html>
-                      )}
-                    </Suspense>
-                    
-                    <OrbitControls
-                      enableZoom={false}
-                      maxPolarAngle={Math.PI / 2}
-                      minPolarAngle={0}
-                      rotateSpeed={0.5}
-                      enableDamping={!isMobile}
-                      dampingFactor={0.1}
-                    />
-                  </Canvas>
-                )}
-              </div>
-            </div>
-            
-            {/* Product Info */}
-            <div className="md:w-1/2 md:pl-8">
-              <h3 className="text-2xl font-bold text-gray-800 mb-3">{product.title}</h3>
-              <p className="text-gray-600 mb-4">{product.description}</p>
-              <p className="text-xl font-semibold text-pink-600 mb-6">${product.variants[0].price}</p>
-              <Link 
-                to={`/product/${product.id.split('/').pop()}`}
-                className="inline-block bg-pink-500 text-white font-medium px-6 py-3 rounded-md hover:bg-pink-600 transition shadow-sm"
-              >
-                View Details
-              </Link>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
 // Product card with 3D model
 function ProductCard({ 
   product, 
@@ -246,16 +121,11 @@ function ProductCard({
   forceVisible?: boolean 
 }) {
   const { addToCart } = useShopContext();
-  const [isVisible, setIsVisible] = useState(false);
   const [modelError, setModelError] = useState(false);
   const [useFallbackImage, setUseFallbackImage] = useState(false);
   const { isMobile, shouldUseImages, dpr } = getDeviceCapabilities();
-  const [retryCount, setRetryCount] = useState(0);
   
-  // Track whether this card is actually visible in the viewport
-  const [isReadyToRender, setIsReadyToRender] = useState(false);
-
-  // Extract product ID from the Shopify handle first
+  // Extract product ID from the Shopify handle
   const productId = parseInt(product.id.split('/').pop() || '1', 10);
   
   // For performance on mobile, we might want to use images instead of 3D models
@@ -263,71 +133,19 @@ function ProductCard({
     // If we should use images based on device capability, set fallback image
     if (shouldUseImages) {
       setUseFallbackImage(true);
-      return;
     }
-    
-    // Use progressive loading scheme for product cards
-    const baseDelay = isMobile ? 400 : 200; 
-    
-    // Calculate staggered delay based on product ID to avoid all models loading at once
-    // This spreads out the WebGL context creation and network requests
-    const staggeredDelay = baseDelay + ((productId % 10) * 150);
-    
-    // Set up visibility check to ensure we only show when page is ready
-    const checkVisibilityAndLoad = () => {
-      // Check if main loader is gone and this product card is in viewport
-      if (!getMainLoaderActive() && forceVisible) {
-        // Additional delay after loader disappears, staggered by product ID
-        setTimeout(() => {
-          setIsReadyToRender(true);
-          setIsVisible(true);
-          console.log(`Product card model ${productId} visible`);
-        }, staggeredDelay);
-      } else if (!getMainLoaderActive()) {
-        // If not in viewport, mark as ready but don't make visible yet
-        setIsReadyToRender(true);
-      } else {
-        // Check again in a bit
-        setTimeout(checkVisibilityAndLoad, 100);
-      }
-    };
-    
-    const timer = setTimeout(checkVisibilityAndLoad, 200);
-    
-    return () => clearTimeout(timer);
-  }, [isMobile, shouldUseImages, productId, forceVisible]);
+  }, [shouldUseImages]);
   
-  // Monitor whether this product card is in viewport
-  useEffect(() => {
-    if (forceVisible && isReadyToRender && !isVisible) {
-      // If it becomes visible and we're ready to render, show the model
-      setIsVisible(true);
-      console.log(`Product card ${productId} now in viewport, showing model`);
-    }
-  }, [forceVisible, isReadyToRender, isVisible, productId]);
-  
-  // Log which product is using which model ID (fixed position)
+  // Log model ID for debugging
   useEffect(() => {
     console.log(`Product "${product.title}" using 3D model ID: ${productId}`);
   }, [product.title, productId]);
 
-  // Handle 3D model error with retry mechanism
+  // Simple error handler
   const handleModelError = () => {
-    console.log(`Model error for product ${productId}, retry: ${retryCount}`);
+    console.log(`Model error for product ${productId}`);
     setModelError(true);
-    
-    // Try up to 2 times to reload the model with increasing delays
-    if (retryCount < 2) {
-      const retryDelay = (retryCount + 1) * 1000; // 1s, then 2s
-      
-      setTimeout(() => {
-        setModelError(false);
-        setRetryCount(prev => prev + 1);
-      }, retryDelay);
-    } else {
-      // After retries, fall back to image
-      setUseFallbackImage(true);
-    }
+    setUseFallbackImage(true);
   };
 
   // Get fallback image URL with better error handling
@@ -358,8 +176,8 @@ function ProductCard({
               }}
             />
           </div>
-        ) : isVisible && forceVisible ? (
-          // Only render Canvas when both ready to render AND in viewport
+        ) : (
+          // Always render Canvas for 3D models
           <Canvas
             camera={{ position: [0, 0, 4.0], fov: 30 }}
             dpr={dpr}
@@ -417,17 +235,6 @@ function ProductCard({
               dampingFactor={0.1}
             />
           </Canvas>
-        ) : (
-          // Display loading placeholder when not ready or not in viewport
-          <div className="w-full h-full flex items-center justify-center bg-gray-50">
-            <div className="p-4 rounded-lg bg-white/70 shadow-sm">
-              <div className="animate-pulse flex space-x-2">
-                <div className="w-2 h-2 rounded-full bg-blue-400"></div>
-                <div className="w-2 h-2 rounded-full bg-blue-400" style={{animationDelay: '150ms'}}></div>
-                <div className="w-2 h-2 rounded-full bg-blue-400" style={{animationDelay: '300ms'}}></div>
-              </div>
-            </div>
-          </div>
         )}
       </div>
       
@@ -443,24 +250,84 @@ function ProductCard({
   );
 }
 
-// Banh Mi marquee section with plain images
-function BanhMiMarquee() {
-  return (
-    <section className="py-4 bg-yellow-300 my-8">
-      <h2 className="sr-only">Banh Mi Section</h2>
+// Simple Banh Mi 3D model component
+function BanhMi3D({ rotationSpeed = 0.005, index }: { rotationSpeed: number; index: number }) {
+  const groupRef = useRef<THREE.Group>(null);
+  
+  // Load the model (with explicit path)
+  const model = useGLTF("https://storage.googleapis.com/kgbakerycakes/banhmi.glb");
+  
+  // Animate the model
+  useFrame(() => {
+    if (groupRef.current) {
+      // Rotate in different directions based on index
+      const direction = index % 2 === 0 ? 1 : -1;
+      groupRef.current.rotation.y += rotationSpeed * direction;
       
-      {/* Marquee Container */}
+      // Add a gentle floating motion
+      const time = Date.now() * 0.001;
+      const offset = index * 0.5;
+      groupRef.current.position.y = Math.sin(time + offset) * 0.1;
+    }
+  });
+  
+  // Return the model in a group for easier manipulation
+  return (
+    <group ref={groupRef} scale={[1.5, 1.5, 1.5]}>
+      {model.scene ? <primitive object={model.scene} /> : null}
+    </group>
+  );
+}
+
+// Simplified BanhMi marquee with a React Three Fiber approach for better compatibility
+function BanhMiMarquee() {
+  const { isMobile } = getDeviceCapabilities();
+  
+  // Simplified BanhMi model component using react-three-fiber/drei
+  const BanhMiModel = () => {
+    const groupRef = useRef<THREE.Group>(null);
+    const { scene } = useGLTF('https://storage.googleapis.com/kgbakerycakes/banhmi.glb');
+    
+    // Rotate the model on each frame
+    useFrame(() => {
+      if (groupRef.current) {
+        groupRef.current.rotation.y += 0.01;
+      }
+    });
+    
+    // Return the model
+    return (
+      <group ref={groupRef} scale={[1.5, 1.5, 1.5]}>
+        {scene && <primitive object={scene} />}
+      </group>
+    );
+  };
+  
+  return (
+    <section className="w-full py-4 bg-yellow-300 overflow-hidden">
+      {/* 3D Model Display */}
+      <div className="container mx-auto h-40 relative mb-2">
+        <Canvas
+          camera={{ position: [0, 0, 5], fov: 40 }}
+          dpr={1}
+          gl={{ preserveDrawingBuffer: true, powerPreference: isMobile ? 'low-power' : 'default' }}
+          frameloop="always"
+        >
+          <ambientLight intensity={0.8} />
+          <directionalLight intensity={0.5} position={[1, 1, 1]} />
+          <Suspense fallback={null}>
+            <BanhMiModel />
+          </Suspense>
+        </Canvas>
+      </div>
+      
+      {/* Scrolling text marquee */}
       <div className="relative w-full overflow-hidden">
-        {/* Marquee Content - Left to Right */}
         <div className="flex items-center animate-marquee whitespace-nowrap py-2">
-          {Array.from({ length: 10 }).map((_, index) => (
-            <div className="flex items-center mx-4" key={`banh-item-${index}`}>
-              <img 
-                src="/images/banh-mi.png" 
-                alt="Banh Mi" 
-                className={`h-16 w-auto ${index % 2 === 0 ? 'animate-spin-slow' : 'animate-spin-slow-reverse'}`}
-              />
-              <span className="text-2xl font-bold text-black mx-2">WE HAVE BANH MIS!</span>
+          {Array.from({ length: 15 }).map((_, index) => (
+            <div className="flex items-center mx-8" key={`banh-item-${index}`}>
+              <span className="text-3xl font-bold text-black">WE HAVE BANH MIS!</span>
+              <span className="text-3xl mx-4">•</span>
             </div>
           ))}
         </div>
@@ -490,7 +357,7 @@ function AnimationStyles() {
       }
       
       .animate-marquee {
-        animation: marquee 30s linear infinite;
+        animation: marquee 20s linear infinite;
       }
       
       .animate-spin-slow {
@@ -515,8 +382,6 @@ function AnimationStyles() {
 export default function HomePage() {
   const { products, loading } = useShopContext();
   const [displayedProducts, setDisplayedProducts] = useState<any[]>([]);
-  const [isInViewport, setIsInViewport] = useState<{[key: string]: boolean}>({});
-  const gridRef = useRef<HTMLDivElement>(null);
   
   // Set up displayed products
   useEffect(() => {
@@ -542,43 +407,7 @@ export default function HomePage() {
     }
   }, [products, loading]);
   
-  // Set up intersection observer to only load models that are visible
-  useEffect(() => {
-    if (!gridRef.current) return;
-    
-    const options = {
-      root: null,
-      rootMargin: '100px', // Load slightly before they come into view
-      threshold: 0.1
-    };
-    
-    // Create an observer instance
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        const productId = entry.target.getAttribute('data-product-id');
-        if (productId) {
-          setIsInViewport(prev => ({
-            ...prev,
-            [productId]: entry.isIntersecting
-          }));
-        }
-      });
-    }, options);
-    
-    // Observe product cards
-    const productCards = gridRef.current.querySelectorAll('[data-product-id]');
-    productCards.forEach(card => {
-      observer.observe(card);
-    });
-    
-    return () => {
-      if (productCards.length) {
-        productCards.forEach(card => {
-          observer.unobserve(card);
-        });
-      }
-    };
-  }, [displayedProducts.length]);
+  // No need for viewport monitoring - all models always visible
 
   // Add styles for animations
   AnimationStyles();
@@ -593,10 +422,7 @@ export default function HomePage() {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      {/* Featured Cake */}
-      {displayedProducts.length > 0 && (
-        <FeaturedCake product={displayedProducts[0]} />
-      )}
+      {/* Featured Cake removed */}
       
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-800 text-center">Our Collection</h1>
@@ -606,26 +432,10 @@ export default function HomePage() {
       </div>
       
       {/* Products Grid */}
-      <div ref={gridRef} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {displayedProducts.slice(0, 6).map((product: any) => { // Only show first 6 products
-          // Ensure we extract ID consistently
-          const productIdStr = String(product.id.split('/').pop() || '1');
-          // Default to visible if not explicitly set to false
-          const isVisible = isInViewport[productIdStr] !== false; 
-          
-          return (
-            <div 
-              key={product.id} 
-              data-product-id={productIdStr} 
-              className="product-card-container"
-            >
-              <ProductCard 
-                product={product} 
-                forceVisible={isVisible} 
-              />
-            </div>
-          );
-        })}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {displayedProducts.slice(0, 6).map((product: any) => ( // Only show first 6 products
+          <ProductCard key={product.id} product={product} />
+        ))}
       </div>
       
       {displayedProducts.length === 0 && (
