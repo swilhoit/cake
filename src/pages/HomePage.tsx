@@ -325,16 +325,16 @@ export default function HomePage() {
         </div>
       </section>
       
-      {/* Banh Mi Marquee Section with yellow background */}
+      {/* Banh Mi Marquee Section with yellow background - Simplified to 1 line */}
       <section className="py-8 bg-yellow-300 my-12 overflow-hidden">
         <h2 className="sr-only">Banh Mi Section</h2>
         
-        {/* Marquee Container */}
+        {/* Marquee Container - Single line only */}
         <div className="marquee-container relative w-full">
-          {/* First Marquee - Left to Right - FASTER speed */}
+          {/* Single Marquee - Left to Right - FASTER speed */}
           <div className="marquee-content flex animate-marquee-fast">
             {/* Repeat the content multiple times alternating model and text */}
-            {[1, 2, 3, 4, 5, 6].map((item) => (
+            {[1, 2, 3, 4, 5, 6, 7, 8].map((item) => (
               <React.Fragment key={`banh-left-${item}`}>
                 <div className="h-40 w-40 mx-4">
                   <BanhMiModelSmall rotateRight={true} />
@@ -347,33 +347,6 @@ export default function HomePage() {
               </React.Fragment>
             ))}
           </div>
-          
-          {/* Second Marquee - Right to Left (reversed) - FASTER speed */}
-          <div className="marquee-content flex animate-marquee-reverse-fast mt-8">
-            {/* Repeat the content multiple times alternating text and model */}
-            {[1, 2, 3, 4, 5, 6].map((item) => (
-              <React.Fragment key={`banh-right-${item}`}>
-                <div className="flex items-center mx-4">
-                  <h3 className="text-5xl font-black text-black whitespace-nowrap font-playfair">
-                    WE HAVE BANH MIS!
-                  </h3>
-                </div>
-                <div className="h-40 w-40 mx-4">
-                  <BanhMiModelSmall rotateRight={false} />
-                </div>
-              </React.Fragment>
-            ))}
-          </div>
-        </div>
-        
-        {/* Call to action button centered below the marquee */}
-        <div className="text-center mt-8 mb-4">
-          <Link 
-            to="/shop" 
-            className="inline-block bg-black hover:bg-black/80 text-yellow-400 font-bold px-10 py-4 rounded-full transition duration-300 text-xl font-rubik"
-          >
-            Order Banh Mi
-          </Link>
         </div>
       </section>
     </div>
