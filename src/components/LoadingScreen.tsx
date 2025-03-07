@@ -8,6 +8,8 @@ const LoadingScreen: React.FC = () => {
   const { isLoading, progress } = usePreload();
   const [currentTip, setCurrentTip] = useState(0);
   const [showLoader, setShowLoader] = useState(true);
+  const [isExiting, setIsExiting] = useState(false);
+  const [progressComplete, setProgressComplete] = useState(false);
   
   // Update global variable when loading state changes
   useEffect(() => {
@@ -16,6 +18,13 @@ const LoadingScreen: React.FC = () => {
       mainLoaderActive = false;
     };
   }, [isLoading]);
+  
+  // Check if progress is complete and trigger green flash
+  useEffect(() => {
+    if (progress >= 100) {
+      setProgressComplete(true);
+    }
+  }, [progress]);
   
   const loadingTips = [
     "Did you know? Our 3D cake models are rendered in real-time.",
@@ -41,27 +50,33 @@ const LoadingScreen: React.FC = () => {
   
   // Handle hiding the loader with animation
   useEffect(() => {
-    if (!isLoading) {
+    if (!isLoading && !isExiting) {
+      // Start exit animation
+      setIsExiting(true);
+      
       // Set a timeout to allow the exit animation to complete
       const timer = setTimeout(() => {
         setShowLoader(false);
       }, 800); // Match animation duration
       return () => clearTimeout(timer);
-    } else {
+    } else if (isLoading) {
+      setIsExiting(false);
       setShowLoader(true);
     }
-  }, [isLoading]);
+  }, [isLoading, isExiting]);
   
   // Don't render anything if not showing
   if (!showLoader) return null;
   
   return (
     <div 
-      className={`fixed inset-0 z-[9999] flex flex-col items-center justify-center ${isLoading ? 'animate-slide-up' : 'transition-transform duration-800 transform translate-y-full'}`}
+      className={`fixed inset-0 z-[9999] flex flex-col items-center justify-center ${
+        isExiting ? 'animate-slide-down' : 'animate-slide-up'
+      }`}
       style={{ 
         background: 'linear-gradient(-45deg, rgba(250, 220, 245, 1), rgba(220, 245, 250, 1), rgba(220, 250, 230, 1), rgba(245, 250, 220, 1))',
         backgroundSize: '400% 400%',
-        animation: 'gradient 15s ease infinite, slideUp 0.8s ease-out forwards',
+        animation: `gradient 15s ease infinite${isExiting ? '' : ', slideUp 0.8s ease-out forwards'}`,
         backdropFilter: 'blur(5px)'
       }}
     >
@@ -87,7 +102,7 @@ const LoadingScreen: React.FC = () => {
         {/* Progress bar */}
         <div className="w-full bg-gray-200 rounded-full h-2.5 mb-2">
           <div 
-            className="bg-pink-500 h-2.5 rounded-full transition-all duration-300 ease-out"
+            className={`${progressComplete ? 'animate-flash-green' : 'bg-pink-500'} h-2.5 rounded-full transition-all duration-300 ease-out`}
             style={{ width: `${Math.max(5, progress)}%` }}
           ></div>
         </div>
