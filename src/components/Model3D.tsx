@@ -10,6 +10,17 @@ import { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 const CLOUD_STORAGE_BASE = 'https://storage.googleapis.com/kgbakerycakes/optimized/';
 const DRACO_DECODER_PATH = 'https://www.gstatic.com/draco/versioned/decoders/1.5.5/';
 
+// Create and reuse a single DRACOLoader instance
+const createDracoLoader = () => {
+  const dracoLoader = new DRACOLoader();
+  dracoLoader.setDecoderPath(DRACO_DECODER_PATH);
+  dracoLoader.setDecoderConfig({ type: 'js' });
+  return dracoLoader;
+};
+
+// Shared DRACO loader to prevent duplicate instances
+const globalDracoLoader = createDracoLoader();
+
 // Loading indicator component without text
 function ModelLoader() {
   return (
@@ -28,14 +39,6 @@ function ModelError({ message }: { message: string }) {
       <meshStandardMaterial color="#ff0000" />
     </mesh>
   );
-}
-
-// Create a DRACOLoader helper function
-function createDracoLoader() {
-  const dracoLoader = new DRACOLoader();
-  dracoLoader.setDecoderPath(DRACO_DECODER_PATH);
-  dracoLoader.setDecoderConfig({ type: 'js' });
-  return dracoLoader;
 }
 
 // Get a cake variant name based on ID number for visual differentiation
@@ -57,8 +60,8 @@ function getCakeVariantName(id: number): string {
   return modelName;
 }
 
-// Initialize model cache
-const loadedModels = new Map();
+// Global model cache
+const modelCache = new Map<string, GLTF>();
 
 // Main 3D model component
 export default function Model3D({ 
@@ -95,6 +98,17 @@ export default function Model3D({
   
   const handleModelLoaded = useCallback(() => {
     setIsLoading(false);
+  }, []);
+
+  // Preload configuration - do this once globally
+  useEffect(() => {
+    // Configure the loader for all future useGLTF calls
+    const gltfLoader = new GLTFLoader();
+    gltfLoader.setDRACOLoader(globalDracoLoader);
+    
+    return () => {
+      // Don't dispose global loader on unmount of individual components
+    };
   }, []);
 
   // Return the 3D model content directly (no Canvas)
@@ -143,38 +157,18 @@ function ModelContent({
   // Reference to the group containing our model
   const groupRef = useRef<THREE.Group>(null);
   
-  // Setup draco loader and handle model preloading
+  // State to track if model is loaded
+  const [modelLoaded, setModelLoaded] = useState(false);
+  const [modelError, setModelError] = useState<string | null>(null);
+  const [model, setModel] = useState<THREE.Group | null>(null);
+  
+  // Preload model
   useEffect(() => {
-    // Create draco loader for loading compressed models
-    const dracoLoader = createDracoLoader();
-    
-    // Configure GLTFLoader with draco support
-    const gltfLoader = new GLTFLoader();
-    gltfLoader.setDRACOLoader(dracoLoader);
-    
-    // Manually preload the model with our configured loader
-    gltfLoader.load(
-      modelUrl,
-      () => {
-        console.log(`Preloaded model: ${modelUrl}`);
-      },
-      (progress) => {
-        if (progress.lengthComputable) {
-          const percent = Math.round((progress.loaded / progress.total) * 100);
-          console.log(`Preloading ${modelUrl}: ${percent}%`);
-        }
-      },
-      (error: any) => {
-        console.warn(`Preload warning: ${error.message}`);
-      }
-    );
-    
-    // Tell useGLTF to load this model
+    // Preload the model first
     useGLTF.preload(modelUrl);
     
+    // Cleanup
     return () => {
-      // Cleanup
-      dracoLoader.dispose();
       try {
         useGLTF.clear(modelUrl);
       } catch (e) {
@@ -184,18 +178,45 @@ function ModelContent({
     };
   }, [modelUrl]);
   
-  // Load the model using useGLTF
-  let gltf: THREE.Group | null = null;
-  try {
-    const result = useGLTF(modelUrl);
-    if (result && result.scene) {
-      gltf = result.scene;
+  // Actually load the model with proper async handling
+  useEffect(() => {
+    let isMounted = true;
+    
+    async function loadModel() {
+      try {
+        // Load the model
+        const result = await useGLTF(modelUrl);
+        
+        // Only update state if component is still mounted
+        if (isMounted) {
+          if (result && result.scene) {
+            setModel(result.scene.clone()); // Clone to avoid shared model issues
+            setModelLoaded(true);
+            onLoad();
+            console.log(`Model successfully loaded: ${variantName}`);
+          } else {
+            const errorMsg = 'Model loaded but scene is missing';
+            setModelError(errorMsg);
+            onError(errorMsg);
+          }
+        }
+      } catch (error) {
+        if (isMounted) {
+          const errorMsg = error instanceof Error ? error.message : String(error);
+          console.error(`Error loading model: ${errorMsg}`);
+          setModelError(errorMsg);
+          onError(`Failed to load model: ${errorMsg}`);
+        }
+      }
     }
-  } catch (error) {
-    console.error(`Error loading model: ${error}`);
-    onError(`Failed to load model: ${error}`);
-    return <ModelError message={String(error)} />;
-  }
+    
+    loadModel();
+    
+    // Cleanup function
+    return () => {
+      isMounted = false;
+    };
+  }, [modelUrl, onError, onLoad, variantName]);
   
   // Handle rotation animation
   useFrame(() => {
@@ -204,23 +225,24 @@ function ModelContent({
     }
   });
   
-  // Notify when model is ready
-  useEffect(() => {
-    if (gltf) {
-      console.log(`Model ready: ${variantName}`);
-      onLoad();
-    }
-  }, [gltf, onLoad, variantName]);
+  // Show error state
+  if (modelError) {
+    return <ModelError message={modelError} />;
+  }
   
-  // Show loading state if model isn't ready
-  if (!gltf) {
+  // Show loading state
+  if (!modelLoaded || !model) {
     return <ModelLoader />;
   }
   
   // Render the model
   return (
     <group ref={groupRef} scale={[scale, scale, scale]}>
-      <primitive object={gltf} />
+      <primitive object={model} />
     </group>
   );
-} 
+}
+
+// Configure THREE.js to limit cached resources
+THREE.Cache.enabled = true;
+// THREE.Cache.limit = 50; // Not available in THREE.js TypeScript definition 
