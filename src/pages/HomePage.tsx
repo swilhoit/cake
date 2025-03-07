@@ -324,38 +324,28 @@ export default function HomePage() {
         </div>
       </section>
       
-      {/* Banh Mi Marquee Section */}
-      <section className="py-8 bg-yellow-400 my-12 overflow-hidden">
+      {/* Banh Mi Marquee Section - No background */}
+      <section className="py-8 my-12 overflow-hidden">
         <h2 className="sr-only">Banh Mi Section</h2>
         
         {/* Marquee Container */}
         <div className="marquee-container relative w-full">
-          {/* First Marquee - Left to Right */}
+          {/* First Marquee - Left to Right - Models only, no text */}
           <div className="marquee-content flex animate-marquee">
-            {/* Repeat the content multiple times to ensure continuous scrolling */}
-            {[1, 2, 3, 4, 5].map((item) => (
-              <div key={`banh-left-${item}`} className="flex items-center mx-12">
-                <div className="h-40 w-40 mr-6">
-                  <BanhMiModelSmall rotateRight={true} />
-                </div>
-                <h3 className="text-5xl font-black text-black whitespace-nowrap font-playfair">
-                  We have Banh Mis!
-                </h3>
+            {/* Repeat the models multiple times to ensure continuous scrolling */}
+            {[1, 2, 3, 4, 5, 6, 7, 8].map((item) => (
+              <div key={`banh-left-${item}`} className="h-40 w-40 mx-6">
+                <BanhMiModelSmall rotateRight={true} />
               </div>
             ))}
           </div>
           
-          {/* Second Marquee - Right to Left (reversed) */}
+          {/* Second Marquee - Right to Left (reversed) - Models only, no text */}
           <div className="marquee-content flex animate-marquee-reverse mt-4">
-            {/* Repeat the content multiple times in reverse */}
-            {[1, 2, 3, 4, 5].map((item) => (
-              <div key={`banh-right-${item}`} className="flex items-center mx-12">
-                <h3 className="text-5xl font-black text-black whitespace-nowrap font-playfair mr-6">
-                  Freshly Made Daily!
-                </h3>
-                <div className="h-40 w-40">
-                  <BanhMiModelSmall rotateRight={false} />
-                </div>
+            {/* Repeat the models multiple times in reverse */}
+            {[1, 2, 3, 4, 5, 6, 7, 8].map((item) => (
+              <div key={`banh-right-${item}`} className="h-40 w-40 mx-6">
+                <BanhMiModelSmall rotateRight={false} />
               </div>
             ))}
           </div>
@@ -365,9 +355,9 @@ export default function HomePage() {
         <div className="text-center mt-8 mb-4">
           <Link 
             to="/shop" 
-            className="inline-block bg-black hover:bg-gray-800 text-yellow-400 font-bold px-10 py-5 rounded-xl transition shadow-lg text-xl font-rubik"
+            className="inline-block bg-transparent hover:bg-black hover:text-white border-2 border-black font-bold px-10 py-4 rounded-full transition duration-300 text-xl font-rubik"
           >
-            Order Now
+            Order Banh Mi
           </Link>
         </div>
       </section>
@@ -409,6 +399,10 @@ function BanhMiModelSmall({ rotateRight }: { rotateRight: boolean }) {
       }}
       className="!touch-none"
       style={{ background: 'transparent' }}
+      onCreated={({ gl }) => {
+        // Set clear color with full transparency
+        gl.setClearColor(0x000000, 0);
+      }}
     >
       <ambientLight intensity={0.8} />
       <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} intensity={1} castShadow />
