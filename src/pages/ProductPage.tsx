@@ -363,7 +363,7 @@ export default function ProductPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
         {/* Product Image/3D Model */}
         <div>
-          <div className="rounded-lg overflow-hidden h-[650px] relative">
+          <div className="rounded-lg overflow-hidden h-[800px] relative">
             {useFallbackImage ? (
               <div className="bg-white rounded-lg shadow-lg overflow-hidden">
                 <img 
@@ -374,7 +374,7 @@ export default function ProductPage() {
               </div>
             ) : (
               <Canvas
-                camera={{ position: [0, 0, 3.5], fov: 30 }}
+                camera={{ position: [0, 0, 4.2], fov: 35 }}
                 dpr={dpr}
                 gl={{ 
                   antialias: true,
@@ -422,7 +422,7 @@ export default function ProductPage() {
                   {!modelError ? (
                     <>
                       <Model3D 
-                        scale={2.8}
+                        scale={2.5}
                         rotationSpeed={0.003} 
                         productId={id}
                         isDetailView={true}
@@ -437,8 +437,8 @@ export default function ProductPage() {
                 <OrbitControls 
                   autoRotate={false}
                   enableZoom={true}
-                  maxZoom={2.0}
-                  minZoom={0.8}
+                  maxZoom={2.5}
+                  minZoom={0.6}
                   maxPolarAngle={Math.PI / 1.5}
                   minPolarAngle={0}
                 />
