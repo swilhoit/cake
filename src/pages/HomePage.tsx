@@ -185,66 +185,78 @@ function ModelLoadingFallback() {
 }
 
 // Product card with 3D model
-function ProductCard({ product }: { product: any }) {
+function ProductCard({ 
+  product, 
+  index,
+  use3D = false
+}: { 
+  product: any, 
+  index: number,
+  use3D?: boolean 
+}) {
   const { addToCart } = useShopContext();
   const [isVisible, setIsVisible] = useState(false);
-  const [modelError, setModelError] = useState(false);
   const [useFallbackImage, setUseFallbackImage] = useState(false);
   const { isMobile, shouldUseImages, dpr } = getDeviceCapabilities();
-  const [retryCount, setRetryCount] = useState(0);
   const navigate = useNavigate();
   const [isHovered, setIsHovered] = useState(false);
+  const [containerScale, setContainerScale] = useState(1);
   const cardRef = useRef<HTMLDivElement>(null);
+  const [isInView, setIsInView] = useState(false);
 
   // Extract product ID from the Shopify handle or use a default ID
   const productId = product.id ? parseInt(product.id.split('/').pop() || '1', 10) : 1;
 
-  // For performance on mobile, we might want to use images instead of 3D models
+  console.log(`ProductCard for ID ${productId}: use3D=${use3D}, useFallbackImage=${useFallbackImage}`);
+
+  // Force fallback to image if we're not using 3D
   useEffect(() => {
-    // If we should use images based on device capability, set fallback image
-    if (shouldUseImages) {
+    if (!use3D || shouldUseImages) {
       setUseFallbackImage(true);
-      return;
     }
-    
-    // Only show the model after the loading screen is gone
-    if (!mainLoaderActive) {
-      // Only show the model after a delay to ensure initial mount is complete
-      // Shorter delay to show models faster
-      const delay = isMobile ? 200 : 50;
-      
+  }, [use3D, shouldUseImages]);
+
+  // Check for visibility
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setIsInView(true);
+          console.log(`ProductCard ${productId} is now in view`);
+        } else {
+          setIsInView(false);
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    if (cardRef.current) {
+      observer.observe(cardRef.current);
+    }
+
+    return () => {
+      if (cardRef.current) {
+        observer.unobserve(cardRef.current);
+      }
+    };
+  }, [productId]);
+
+  // Add a small delay before showing models to ensure DOM is ready
+  useEffect(() => {
+    if (use3D && !useFallbackImage) {
       const timer = setTimeout(() => {
         setIsVisible(true);
-        console.log(`Making model visible for product ${productId}`);
-      }, delay);
+      }, 500 + (index * 50)); // Stagger loading
       
       return () => clearTimeout(timer);
     }
-  }, [isMobile, shouldUseImages, productId, mainLoaderActive]);
+  }, [use3D, useFallbackImage, index]);
 
-  // Handle 3D model error with retry mechanism
-  const handleModelError = () => {
-    console.log(`Model error for product ${productId}, retry: ${retryCount}`);
-    setModelError(true);
-    
-    // In production with CORS errors, try a couple of times then fallback
-    if (retryCount < 2) {
-      setTimeout(() => {
-        setModelError(false);
-        setRetryCount(prev => prev + 1);
-      }, 1000); // Try again after 1 second
-    } else {
-      // After 2 retries, fall back to image
-      setUseFallbackImage(true);
-    }
-  };
-
-  // Get fallback image URL with better error handling
+  // Get appropriate fallback image URL
   const getFallbackImageUrl = () => {
     if (product.images && product.images.length > 0) {
       return product.images[0].src;
     }
-    // Use a local placeholder based on product ID
     return `/images/cakes/default.jpg`;
   };
 
@@ -268,15 +280,19 @@ function ProductCard({ product }: { product: any }) {
           alt={product.title}
           className="w-full h-full object-cover"
           onError={(e) => {
-            // If the image fails to load, use a very simple colored div as fallback
+            // If image fails to load, use a colored background
             const target = e.target as HTMLImageElement;
             target.style.display = 'none';
             target.parentElement!.style.backgroundColor = `hsl(${(productId * 30) % 360}, 70%, 80%)`;
           }}
         />
-      ) : isVisible && !mainLoaderActive && (
+      ) : use3D && isVisible && isInView && (
         <div className="w-full h-full relative">
-          <ModelCanvasInstance productId={productId} isHovered={isHovered} />
+          <ModelCanvasInstance 
+            productId={productId} 
+            isHovered={isHovered} 
+            fallbackText="Loading 3D model..."
+          />
         </div>
       )}
 
@@ -296,6 +312,7 @@ export default function HomePage() {
   const [loaderDismissed, setLoaderDismissed] = useState(false);
   const [featuredProductId, setFeaturedProductId] = useState<number>(1);
   const [show3DModels, setShow3DModels] = useState(false);
+  const [use3DForGrid, setUse3DForGrid] = useState(false);  // Default to false for performance
   
   // Monitor loading screen state
   useEffect(() => {
@@ -370,6 +387,12 @@ export default function HomePage() {
     }
   }, [displayedProducts, show3DModels]);
   
+  // Add a toggle for 3D models in the grid
+  const toggle3DModels = useCallback(() => {
+    setUse3DForGrid(prev => !prev);
+    console.log("Toggled 3D models for product grid:", !use3DForGrid);
+  }, [use3DForGrid]);
+  
   return (
     <div className="container mx-auto px-4 pb-12">
       {/* Featured Product with 3D Model */}
@@ -422,7 +445,19 @@ export default function HomePage() {
       {/* Product Grid Section */}
       <section className="py-12">
         <div className="container mx-auto px-4">
-          <h2 className="text-3xl font-bold mb-8 text-center text-gray-800">Our Cakes</h2>
+          <div className="flex justify-between items-center mb-8">
+            <h2 className="text-3xl font-bold text-gray-800">Our Cakes</h2>
+            
+            {/* Add 3D toggle button */}
+            <button 
+              onClick={toggle3DModels}
+              className={`px-4 py-2 rounded-lg text-sm font-medium shadow-sm ${
+                use3DForGrid ? 'bg-pink-500 text-white' : 'bg-gray-200 text-gray-700'
+              }`}
+            >
+              {use3DForGrid ? '3D: On' : '3D: Off'}
+            </button>
+          </div>
           
           {loading ? (
             <div className="flex justify-center items-center py-12">
@@ -430,26 +465,17 @@ export default function HomePage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {displayedProducts.map((product: any) => (
-                <Link 
+              {displayedProducts.map((product: any, index: number) => (
+                <div 
                   key={product.id} 
-                  to={`/product/${product.handle || `product-${product.id.split('/').pop()}`}`}
-                  className="block"
+                  className="block" 
                 >
-                  <div className="bg-white shadow-md rounded-lg overflow-hidden transition-transform duration-300 hover:shadow-lg hover:-translate-y-1">
-                    <div className="h-48 bg-gray-100">
-                      <img 
-                        src={product.images?.[0]?.src || "/images/cakes/default.jpg"} 
-                        alt={product.title}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    <div className="p-4">
-                      <h3 className="text-lg font-semibold text-gray-800">{product.title}</h3>
-                      <p className="text-gray-600 mt-1">${parseFloat(product.variants[0].price).toFixed(2)}</p>
-                    </div>
-                  </div>
-                </Link>
+                  <ProductCard 
+                    product={product} 
+                    index={index}
+                    use3D={use3DForGrid}
+                  />
+                </div>
               ))}
             </div>
           )}
