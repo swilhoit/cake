@@ -375,6 +375,28 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+      
+      {/* Banh Mi Marquee Section - Using simple images instead of 3D models */}
+      <section className="py-4 bg-yellow-300 my-8">
+        <h2 className="sr-only">Banh Mi Section</h2>
+        
+        {/* Marquee Container */}
+        <div className="relative w-full overflow-hidden">
+          {/* Marquee Content - Left to Right */}
+          <div className="flex items-center animate-marquee whitespace-nowrap py-2">
+            {Array.from({ length: 10 }).map((_, index) => (
+              <div className="flex items-center mx-4" key={`banh-item-${index}`}>
+                <img 
+                  src="/images/banh-mi.png" 
+                  alt="Banh Mi" 
+                  className={`h-16 w-auto ${index % 2 === 0 ? 'animate-spin-slow' : 'animate-spin-slow-reverse'}`}
+                />
+                <span className="text-2xl font-bold text-black mx-2">WE HAVE BANH MIS!</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
     </div>
   );
 }
@@ -572,4 +594,84 @@ function ModelCanvasInstance({ productId, isHovered }: { productId: number, isHo
       />
     </Canvas>
   );
+}
+
+// Define the keyframes as string constants
+const SPIN_RIGHT_KEYFRAMES = `
+@keyframes spin-right {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+`;
+
+const PULSE_KEYFRAMES = `
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+`;
+
+const FADE_IN_KEYFRAMES = `
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+`;
+
+const MARQUEE_KEYFRAMES = `
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+`;
+
+const SPIN_SLOW_KEYFRAMES = `
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+`;
+
+const SPIN_SLOW_REVERSE_KEYFRAMES = `
+@keyframes spin-slow-reverse {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(-360deg); }
+}
+`;
+
+// Add global animations
+function AnimationStyles() {
+  useEffect(() => {
+    // Add all keyframe animations to document
+    const styleElement = document.createElement('style');
+    styleElement.textContent = `
+      ${SPIN_RIGHT_KEYFRAMES}
+      ${PULSE_KEYFRAMES}
+      ${FADE_IN_KEYFRAMES}
+      ${MARQUEE_KEYFRAMES}
+      ${SPIN_SLOW_KEYFRAMES}
+      ${SPIN_SLOW_REVERSE_KEYFRAMES}
+      
+      .animate-marquee {
+        animation: marquee 30s linear infinite;
+      }
+      
+      .animate-spin-slow {
+        animation: spin-slow 8s linear infinite;
+      }
+      
+      .animate-spin-slow-reverse {
+        animation: spin-slow-reverse 8s linear infinite;
+      }
+    `;
+    document.head.appendChild(styleElement);
+    
+    // Cleanup
+    return () => {
+      document.head.removeChild(styleElement);
+    };
+  }, []);
+  
+  return null;
 } 
