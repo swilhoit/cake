@@ -20,7 +20,7 @@ type WebGLContextManagerType = {
 
 // Create a global WebGL context manager
 const WebGLContextManager: WebGLContextManagerType = {
-  maxContexts: 4, // Limit the number of concurrent WebGL contexts
+  maxContexts: 8, // Increase from 4 to 8 to allow more models
   activeContexts: 0,
   
   canCreateContext() {
@@ -188,7 +188,7 @@ function ModelLoadingFallback() {
 function ProductCard({ 
   product, 
   index,
-  use3D = false
+  use3D = true  // Changed default to true to force 3D models
 }: { 
   product: any, 
   index: number,
@@ -203,18 +203,23 @@ function ProductCard({
   const [containerScale, setContainerScale] = useState(1);
   const cardRef = useRef<HTMLDivElement>(null);
   const [isInView, setIsInView] = useState(false);
+  const [showModel, setShowModel] = useState(false);
+  const [attemptedLoad, setAttemptedLoad] = useState(false);
 
   // Extract product ID from the Shopify handle or use a default ID
   const productId = product.id ? parseInt(product.id.split('/').pop() || '1', 10) : 1;
 
-  console.log(`ProductCard for ID ${productId}: use3D=${use3D}, useFallbackImage=${useFallbackImage}`);
+  console.log(`ProductCard for ID ${productId}: use3D=${use3D}, useFallbackImage=${useFallbackImage}, showModel=${showModel}`);
 
-  // Force fallback to image if we're not using 3D
+  // Force fallback to image ONLY if:
+  // 1. We explicitly don't want 3D (use3D is false)
+  // 2. Device capabilities indicate we should use images
   useEffect(() => {
     if (!use3D || shouldUseImages) {
+      console.log(`Using fallback image for product ${productId} (use3D=${use3D}, shouldUseImages=${shouldUseImages})`);
       setUseFallbackImage(true);
     }
-  }, [use3D, shouldUseImages]);
+  }, [use3D, shouldUseImages, productId]);
 
   // Check for visibility
   useEffect(() => {
@@ -223,6 +228,18 @@ function ProductCard({
         if (entries[0].isIntersecting) {
           setIsInView(true);
           console.log(`ProductCard ${productId} is now in view`);
+          
+          // If we want to use 3D and we're not using a fallback image, show the model
+          if (use3D && !useFallbackImage && !attemptedLoad) {
+            console.log(`Scheduling model display for product ${productId}`);
+            const timer = setTimeout(() => {
+              console.log(`Now showing model for product ${productId}`);
+              setShowModel(true);
+              setAttemptedLoad(true);
+            }, 300 + (index * 100)); // Stagger loading
+            
+            return () => clearTimeout(timer);
+          }
         } else {
           setIsInView(false);
         }
@@ -239,18 +256,7 @@ function ProductCard({
         observer.unobserve(cardRef.current);
       }
     };
-  }, [productId]);
-
-  // Add a small delay before showing models to ensure DOM is ready
-  useEffect(() => {
-    if (use3D && !useFallbackImage) {
-      const timer = setTimeout(() => {
-        setIsVisible(true);
-      }, 500 + (index * 50)); // Stagger loading
-      
-      return () => clearTimeout(timer);
-    }
-  }, [use3D, useFallbackImage, index]);
+  }, [productId, use3D, useFallbackImage, index, attemptedLoad]);
 
   // Get appropriate fallback image URL
   const getFallbackImageUrl = () => {
@@ -266,6 +272,31 @@ function ProductCard({
     navigate(`/product/${handle}`);
   };
 
+  // If loader is active, don't render 3D models in grid
+  const loaderElement = document.querySelector('[class*="fixed inset-0 z-"]');
+  const isLoaderVisible = !!loaderElement;
+  if (isLoaderVisible) {
+    return (
+      <div 
+        ref={cardRef}
+        onClick={goToProductPage} 
+        className="relative h-80 w-full shadow-md rounded-lg overflow-hidden cursor-pointer"
+      >
+        <img 
+          src={getFallbackImageUrl()} 
+          alt={product.title}
+          className="w-full h-full object-cover"
+        />
+        <div className="absolute bottom-0 left-0 w-full bg-white/80 backdrop-blur-sm p-3">
+          <h3 className="text-lg font-semibold text-gray-800">{product.title}</h3>
+          <div className="flex justify-between items-center mt-1">
+            <p className="text-gray-700">${parseFloat(product.variants[0].price).toFixed(2)}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div 
       ref={cardRef}
@@ -274,7 +305,7 @@ function ProductCard({
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {useFallbackImage ? (
+      {useFallbackImage || !showModel ? (
         <img 
           src={getFallbackImageUrl()} 
           alt={product.title}
@@ -286,7 +317,7 @@ function ProductCard({
             target.parentElement!.style.backgroundColor = `hsl(${(productId * 30) % 360}, 70%, 80%)`;
           }}
         />
-      ) : use3D && isVisible && isInView && (
+      ) : (
         <div className="w-full h-full relative">
           <ModelCanvasInstance 
             productId={productId} 
@@ -312,7 +343,7 @@ export default function HomePage() {
   const [loaderDismissed, setLoaderDismissed] = useState(false);
   const [featuredProductId, setFeaturedProductId] = useState<number>(1);
   const [show3DModels, setShow3DModels] = useState(false);
-  const [use3DForGrid, setUse3DForGrid] = useState(false);  // Default to false for performance
+  const [use3DForGrid, setUse3DForGrid] = useState(true);  // Default to true for 3D
   
   // Monitor loading screen state
   useEffect(() => {
@@ -335,6 +366,21 @@ export default function HomePage() {
         WebGLContextManager.resetContextCount();
         setLoaderDismissed(true);
         setShow3DModels(true);
+        
+        // Force check for WebGL support and pre-init
+        try {
+          const canvas = document.createElement('canvas');
+          const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+          if (!gl) {
+            console.error("WebGL is not supported by your browser!");
+            setUse3DForGrid(false);
+          } else {
+            console.log("WebGL is supported!");
+          }
+        } catch (e) {
+          console.error("Error checking WebGL support:", e);
+          setUse3DForGrid(false);
+        }
       }
     }
     
@@ -386,12 +432,6 @@ export default function HomePage() {
       return () => clearInterval(interval);
     }
   }, [displayedProducts, show3DModels]);
-  
-  // Add a toggle for 3D models in the grid
-  const toggle3DModels = useCallback(() => {
-    setUse3DForGrid(prev => !prev);
-    console.log("Toggled 3D models for product grid:", !use3DForGrid);
-  }, [use3DForGrid]);
   
   return (
     <div className="container mx-auto px-4 pb-12">
@@ -445,34 +485,19 @@ export default function HomePage() {
       {/* Product Grid Section */}
       <section className="py-12">
         <div className="container mx-auto px-4">
-          <div className="flex justify-between items-center mb-8">
-            <h2 className="text-3xl font-bold text-gray-800">Our Cakes</h2>
-            
-            {/* Add 3D toggle button */}
-            <button 
-              onClick={toggle3DModels}
-              className={`px-4 py-2 rounded-lg text-sm font-medium shadow-sm ${
-                use3DForGrid ? 'bg-pink-500 text-white' : 'bg-gray-200 text-gray-700'
-              }`}
-            >
-              {use3DForGrid ? '3D: On' : '3D: Off'}
-            </button>
-          </div>
+          <h2 className="text-3xl font-bold mb-8 text-center text-gray-800">Our Cakes</h2>
           
           {loading ? (
             <div className="flex justify-center items-center py-12">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-500"></div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {displayedProducts.map((product: any, index: number) => (
-                <div 
-                  key={product.id} 
-                  className="block" 
-                >
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6">
+              {displayedProducts.slice(0, 6).map((product: any, index: number) => (
+                <div key={product.id} className="block">
                   <ProductCard 
                     product={product} 
-                    index={index}
+                    index={index} 
                     use3D={use3DForGrid}
                   />
                 </div>
