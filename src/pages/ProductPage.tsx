@@ -363,7 +363,7 @@ export default function ProductPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
         {/* Product Image/3D Model */}
         <div>
-          <div className="rounded-lg overflow-hidden h-96 relative">
+          <div className="rounded-lg overflow-hidden h-[500px] relative">
             {useFallbackImage ? (
               <div className="bg-white rounded-lg shadow-lg overflow-hidden">
                 <img 
@@ -374,7 +374,7 @@ export default function ProductPage() {
               </div>
             ) : (
               <Canvas
-                camera={{ position: [0, 0, 5], fov: 35 }}
+                camera={{ position: [0, 0, 3.5], fov: 30 }}
                 dpr={dpr}
                 gl={{ 
                   antialias: true,
@@ -396,20 +396,33 @@ export default function ProductPage() {
                 }}
                 onError={() => handleModelError()}
               >
-                <ambientLight intensity={0.8} />
+                <ambientLight intensity={1.0} />
                 <spotLight 
                   position={[10, 10, 10]} 
                   angle={0.15} 
                   penumbra={1} 
-                  intensity={1} 
+                  intensity={1.5}
                   castShadow 
+                />
+                <spotLight 
+                  position={[-10, 5, -10]} 
+                  angle={0.3} 
+                  penumbra={1} 
+                  intensity={1.2}
+                  color="#fff9e0"  
+                  castShadow={false} 
+                />
+                <directionalLight
+                  position={[0, 5, 5]}
+                  intensity={1.0}
+                  color="#ffffff"
                 />
                 
                 <Suspense fallback={<ModelLoading />}>
                   {!modelError ? (
                     <>
                       <Model3D 
-                        scale={1.98}
+                        scale={2.8}
                         rotationSpeed={0.003} 
                         productId={id}
                         isDetailView={true}
@@ -424,7 +437,7 @@ export default function ProductPage() {
                 <OrbitControls 
                   autoRotate={false}
                   enableZoom={true}
-                  maxZoom={1.5}
+                  maxZoom={2.0}
                   minZoom={0.8}
                   maxPolarAngle={Math.PI / 1.5}
                   minPolarAngle={0}

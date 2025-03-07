@@ -172,7 +172,7 @@ function Model({
     tiltZ: (idNum % 5 - 2) * 0.1,
     
     // For detail view, different position adjustment (moving up by adjusting Y position)
-    detailPositionY: -0.7 + (idNum % 3 - 1) * 0.3, // Changed from -1 to -0.7 to move it up
+    detailPositionY: -0.5 + (idNum % 3 - 1) * 0.2, // Adjusted position for detail view (moved up from -0.7)
     
     // Custom variation title
     variantName: getCakeVariantName(idNum)
