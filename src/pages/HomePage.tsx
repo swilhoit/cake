@@ -135,29 +135,27 @@ export const mockProducts = [
 
 // Enhanced function to detect device capabilities
 const getDeviceCapabilities = (): { isMobile: boolean, shouldUseImages: boolean, dpr: [number, number] } => {
-  if (typeof window === 'undefined') {
-    return { isMobile: false, shouldUseImages: false, dpr: [1, 2] };
-  }
+  const [isMobile, setIsMobile] = useState(false);
   
-  // Check if mobile
-  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  // Check for mobile device
+  useEffect(() => {
+    const checkMobile = () => {
+      const mobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
+      setIsMobile(mobile);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
   
-  // Get hardware concurrency (CPU cores)
-  const cpuCores = window.navigator.hardwareConcurrency || 0;
-  
-  // Check for device memory (in GB)
-  const deviceMemory = (navigator as any).deviceMemory || 0;
-  
-  // Determine if we should use images instead of 3D models based on device capability
-  // Be EXTRA conservative with low-end devices ONLY
-  const shouldUseImages = 
-    // Use images only for very low-end devices (1-2 cores, <1GB RAM)
-    (cpuCores < 2 || deviceMemory < 1);
-  
-  // Set appropriate device pixel ratio based on device capability
-  const dpr: [number, number] = isMobile ? [1, 1.5] : [1, 2];
-  
-  return { isMobile, shouldUseImages, dpr };
+  // Return parameters optimized for the current device
+  // Always try to load 3D models, regardless of device
+  return {
+    isMobile,
+    shouldUseImages: false, // Never use fallback images
+    dpr: [1, 2] // Sensible DPR range for most devices
+  };
 };
 
 // Model loading fallback component
@@ -181,7 +179,7 @@ function ProductCard({ product }: { product: any }) {
   const { addToCart } = useShopContext();
   const [isVisible, setIsVisible] = useState(false);
   const [modelError, setModelError] = useState(false);
-  const [useFallbackImage, setUseFallbackImage] = useState(true); // Always use fallback for now
+  const [useFallbackImage, setUseFallbackImage] = useState(false); // Never use fallback by default
   const { isMobile, shouldUseImages, dpr } = getDeviceCapabilities();
   const [retryCount, setRetryCount] = useState(0);
   const navigate = useNavigate();
@@ -219,6 +217,37 @@ function ProductCard({ product }: { product: any }) {
       }
     };
   }, []);
+
+  // For 3D model loading - always try to load models
+  useEffect(() => {
+    // Override shouldUseImages to always try 3D models
+    if (!WebGLContextManager.canCreateContext()) {
+      console.warn("Cannot create WebGL context for product", productId);
+      return;
+    }
+    
+    // Only show the model if in viewport and after a delay
+    if (inViewport) {
+      const delay = isMobile ? 200 : 50;
+      
+      const timer = setTimeout(() => {
+        setIsVisible(true);
+      }, delay);
+      
+      return () => clearTimeout(timer);
+    } else {
+      setIsVisible(false);
+    }
+  }, [isMobile, inViewport, productId]);
+
+  // Clean up when component unmounts or is not in viewport
+  useEffect(() => {
+    return () => {
+      if (!inViewport && isVisible) {
+        setIsVisible(false);
+      }
+    };
+  }, [inViewport, isVisible]);
 
   // Smooth transition for scale and rotation values using useSpring-like approach
   useEffect(() => {
@@ -263,17 +292,17 @@ function ProductCard({ product }: { product: any }) {
 
   // Handle 3D model error with retry mechanism
   const handleModelError = () => {
-    console.log(`Model error for product ${productId}. Falling back to image.`);
+    console.log(`Model error for product ${productId}. Retrying...`);
     setModelError(true);
     
-    if (retryCount < 3) {
+    // Keep retrying without giving up
+    if (retryCount < 5) {
       setTimeout(() => {
         setModelError(false);
         setRetryCount(prev => prev + 1);
       }, 500 * (retryCount + 1));
-    } else {
-      setUseFallbackImage(true);
     }
+    // Never fall back to images, just keep trying or show error
   };
 
   // Handle adding to cart
@@ -283,7 +312,7 @@ function ProductCard({ product }: { product: any }) {
     }
   };
 
-  // Get appropriate fallback image URL
+  // Get appropriate fallback image URL (only for error placeholders)
   const getFallbackImageUrl = () => {
     if (product.featuredImage?.url) {
       return product.featuredImage.url;
@@ -312,13 +341,48 @@ function ProductCard({ product }: { product: any }) {
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {/* Always use image for now until we can fix model loading */}
-      <img 
-        src={getFallbackImageUrl()} 
-        alt={product.title} 
-        className="w-full h-full object-contain transition-transform duration-500 ease-out"
-        style={{ transform: `scale(${isHovered ? 1.5 : 1})` }}
-      />
+      {/* Try to show 3D models, only use fallback if explicitly set */}
+      {useFallbackImage ? (
+        <img 
+          src={getFallbackImageUrl()} 
+          alt={product.title} 
+          className="w-full h-full object-contain transition-transform duration-500 ease-out"
+          style={{ transform: `scale(${isHovered ? 1.5 : 1})` }}
+        />
+      ) : inViewport && isVisible && (
+        <Canvas
+          camera={{ position: [0, 0, 4.0], fov: 30 }}
+          dpr={dpr}
+          gl={{ 
+            antialias: true,
+            alpha: true,
+            preserveDrawingBuffer: false,
+            powerPreference: 'high-performance',
+            depth: true,
+            stencil: false
+          }}
+          frameloop="demand" 
+          className="touch-auto"
+          style={{ 
+            background: 'transparent',
+            touchAction: 'none',
+            overflow: 'visible',
+            transition: 'transform 0.3s ease-out',
+            transform: `scale(${containerScale})`
+          }}
+          onCreated={({ gl }) => {
+            WebGLContextManager.addContext();
+            gl.setPixelRatio(window.devicePixelRatio || 1);
+            gl.setSize(gl.domElement.clientWidth, gl.domElement.clientHeight);
+          }}
+        >
+          <CanvasContent 
+            productId={productId} 
+            scaleValue={scaleValue} 
+            rotationSpeed={rotationSpeed} 
+          />
+        </Canvas>
+      )}
       
       {/* Product info overlay */}
       <div className="absolute bottom-0 left-0 w-full bg-white bg-opacity-80 p-2">
@@ -328,6 +392,40 @@ function ProductCard({ product }: { product: any }) {
         </p>
       </div>
     </div>
+  );
+}
+
+// Separate component to handle WebGL context cleanup
+function CanvasContent({ 
+  productId, 
+  scaleValue, 
+  rotationSpeed 
+}: { 
+  productId: number, 
+  scaleValue: number, 
+  rotationSpeed: number 
+}) {
+  // Clean up WebGL context on unmount
+  useEffect(() => {
+    return () => {
+      WebGLContextManager.removeContext();
+    };
+  }, []);
+
+  return (
+    <>
+      <ambientLight intensity={0.8} />
+      <pointLight position={[10, 10, 10]} intensity={1.0} />
+      <spotLight position={[-10, 10, 10]} intensity={0.8} />
+      
+      <Suspense fallback={<ModelLoadingFallback />}>
+        <Model3D 
+          productId={productId} 
+          scale={scaleValue}
+          rotationSpeed={rotationSpeed}
+        />
+      </Suspense>
+    </>
   );
 }
 

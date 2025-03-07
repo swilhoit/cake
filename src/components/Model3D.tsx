@@ -44,7 +44,7 @@ function ModelError({ message }: { message: string }) {
   );
 }
 
-// Add this helper function after the imports
+// Add this helper function after the imports - better version for Google Cloud Storage
 function modelPreloader() {
   // Enable THREE cache mechanism
   THREE.Cache.enabled = true;
@@ -52,15 +52,34 @@ function modelPreloader() {
   return {
     preload: (url: string) => {
       return new Promise((resolve, reject) => {
+        // For Google Cloud Storage specifically
         const textureLoader = new THREE.FileLoader();
-        textureLoader.setResponseType('blob');
-        textureLoader.setCrossOrigin('anonymous'); // Changed to anonymous which generally works better
-        textureLoader.setWithCredentials(true);
+        textureLoader.setResponseType('arraybuffer'); // Important for binary files like GLB
+        textureLoader.setCrossOrigin('anonymous'); 
+        textureLoader.setWithCredentials(false); // Changed to false for Google Cloud Storage
+        textureLoader.setPath(''); // Make sure no path prefix is added
+        textureLoader.setRequestHeader({
+          'Access-Control-Allow-Origin': '*' // Request header for CORS
+        });
+        
+        console.log(`Preloading model: ${url}`);
         textureLoader.load(
           url,
-          (blob) => resolve(blob),
-          () => {}, // Progress not needed
-          (error) => reject(error)
+          (blob) => {
+            console.log(`Successfully preloaded model: ${url}`);
+            resolve(blob);
+          },
+          (progress) => {
+            // Add progress tracking
+            if (progress.lengthComputable) {
+              const percentComplete = (progress.loaded / progress.total) * 100;
+              console.log(`Loading progress: ${Math.round(percentComplete)}%`);
+            }
+          },
+          (error) => {
+            console.error(`Failed to preload model: ${url}`, error);
+            reject(error);
+          }
         );
       });
     }
@@ -200,7 +219,11 @@ function Model({
     // Get model file based on product ID (modulo operator ensures we stay within bounds)
     const modelIndex = (idNum - 1) % characterModels.length;
     const modelFile = characterModels[modelIndex];
-    const path = `https://storage.googleapis.com/kgbakerycakes/optimized/${modelFile}`;
+    
+    // Explicit Google Cloud Storage URL with cache buster to avoid browser caching issues
+    const cacheBuster = new Date().getTime();
+    const path = `https://storage.googleapis.com/kgbakerycakes/optimized/${modelFile}?cb=${cacheBuster}`;
+    
     console.log(`Loading character model from: ${path}`);
     return path;
   }, [idNum]);
@@ -276,27 +299,10 @@ function Model({
   // Create a fallback model if the scene couldn't be loaded
   useEffect(() => {
     if (!scene) {
-      // Create a fallback geometric shape instead of showing an error
-      const geometry = new THREE.BoxGeometry(1, 1, 1);
-      const material = new THREE.MeshStandardMaterial({ color: bgColor });
-      const fallbackMesh = new THREE.Mesh(geometry, material);
-      
-      const group = new THREE.Group();
-      group.add(fallbackMesh);
-      
-      // Set the scene to this fallback
-      scene = group;
-      
-      // Notify that we're using a fallback
-      console.log("Using fallback geometry instead of model");
-      
-      // Mark as loaded since we have a viable fallback
-      setTimeout(() => {
-        setModelLoaded(true);
-        onLoad();
-      }, 100);
+      // Keep trying - no fallback - log error only
+      console.error("Scene failed to load - continuing to retry");
     }
-  }, [scene, bgColor, onLoad]);
+  }, [scene]);
   
   // Clone the model when it loads successfully
   const model = useMemo(() => {
