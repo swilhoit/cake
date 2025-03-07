@@ -158,8 +158,8 @@ function Model({
   
   // Set the model path - Always use Google Cloud Storage for consistent behavior
   const modelPath = useMemo(() => {
-    // Using a CORS-friendly URL format for Google Cloud Storage
-    const path = `https://storage.googleapis.com/kgbakerycakes/cake_model_${modelNum}.glb`;
+    // Using optimized models from the optimized directory
+    const path = `https://storage.googleapis.com/kgbakerycakes/optimized/cake_model_${modelNum}.glb`;
     console.log(`Loading model from: ${path}`);
     return path;
   }, [modelNum]);

@@ -64,10 +64,16 @@ The application uses glTF models for the 3D cake displays. The models are loaded
 const GCS_URL = 'https://storage.googleapis.com/kgbakerycakes';
 ```
 
+For optimized performance, we use smaller, optimized models from a dedicated directory:
+```typescript
+const OPTIMIZED_MODELS_URL = 'https://storage.googleapis.com/kgbakerycakes/optimized';
+```
+
 To use your own models:
 1. Update the URL in `src/components/Model3D.tsx`
 2. Ensure your models are in glTF format (.glb or .gltf)
 3. Make sure the model IDs match the product IDs from Shopify
+4. For best performance, create optimized versions with smaller file sizes
 
 ## Shopify Product Setup
 

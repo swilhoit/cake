@@ -367,8 +367,8 @@ function BanhMiModelSmall({ rotateRight }: { rotateRight: boolean }) {
     setModelError(true);
   };
   
-  // Direct URL to the Banh Mi model - no timestamp or other modifications
-  const modelUrl = "https://storage.googleapis.com/kgbakerycakes/banhmi.glb";
+  // Using optimized model from the optimized directory
+  const modelUrl = "https://storage.googleapis.com/kgbakerycakes/optimized/banhmi.glb";
   
   // Simple Canvas with minimal configuration
   return (
