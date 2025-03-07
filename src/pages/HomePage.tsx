@@ -324,40 +324,10 @@ export default function HomePage() {
   
   return (
     <div className="container mx-auto px-4 pb-12">
-      {/* Hero Section */}
-      <section className="py-12 md:py-20">
-        <div className="container mx-auto px-4">
-          <div className="flex flex-col md:flex-row items-center">
-            <div className="md:w-1/2 mb-8 md:mb-0">
-              <h1 className="text-4xl md:text-5xl font-bold mb-4 text-gray-800">
-                Delicious Custom Cakes for Every Occasion
-              </h1>
-              <p className="text-lg text-gray-600 mb-6">
-                Handcrafted with love and the finest ingredients. Perfect for birthdays, weddings, and special celebrations.
-              </p>
-              <Link 
-                to="/shop" 
-                className="inline-block bg-pink-500 text-white font-medium px-6 py-3 rounded-md hover:bg-pink-600 transition shadow-md"
-              >
-                Shop Now
-              </Link>
-            </div>
-            <div className="md:w-1/2 relative h-80 md:h-96">
-              {/* Featured 3D Model */}
-              {!mainLoaderActive && (
-                <div className="w-full h-full">
-                  <ModelCanvasInstance productId={1} isHovered={false} />
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </section>
-      
       {/* Product Grid Section */}
       <section className="py-12">
         <div className="container mx-auto px-4">
-          <h2 className="text-3xl font-bold mb-8 text-center text-gray-800">Our Popular Cakes</h2>
+          <h2 className="text-3xl font-bold mb-8 text-center text-gray-800">Our Cakes</h2>
           
           {loading ? (
             <div className="flex justify-center items-center py-12">
@@ -365,10 +335,26 @@ export default function HomePage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {displayedProducts.slice(0, 8).map((product: any) => (
-                <div key={product.id} className="opacity-100 animate-fadeIn">
-                  <ProductCard product={product} />
-                </div>
+              {displayedProducts.map((product: any) => (
+                <Link 
+                  key={product.id} 
+                  to={`/product/${product.handle || `product-${product.id.split('/').pop()}`}`}
+                  className="block"
+                >
+                  <div className="bg-white shadow-md rounded-lg overflow-hidden transition-transform duration-300 hover:shadow-lg hover:-translate-y-1">
+                    <div className="h-48 bg-gray-100">
+                      <img 
+                        src={product.images?.[0]?.src || "/images/cakes/default.jpg"} 
+                        alt={product.title}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <div className="p-4">
+                      <h3 className="text-lg font-semibold text-gray-800">{product.title}</h3>
+                      <p className="text-gray-600 mt-1">${parseFloat(product.variants[0].price).toFixed(2)}</p>
+                    </div>
+                  </div>
+                </Link>
               ))}
             </div>
           )}
