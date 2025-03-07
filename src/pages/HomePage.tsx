@@ -294,6 +294,8 @@ export default function HomePage() {
   const { products, loading } = useShopContext();
   const [displayedProducts, setDisplayedProducts] = useState<any[]>([]);
   const [loaderDismissed, setLoaderDismissed] = useState(false);
+  const [featuredProductId, setFeaturedProductId] = useState<number>(1);
+  const [show3DModels, setShow3DModels] = useState(false);
   
   // Monitor loading screen state
   useEffect(() => {
@@ -301,6 +303,14 @@ export default function HomePage() {
       console.log("Loading screen dismissed, resetting WebGL contexts");
       WebGLContextManager.resetContextCount();
       setLoaderDismissed(true);
+      
+      // Wait a short delay after loader dismisses before showing 3D models
+      const timer = setTimeout(() => {
+        setShow3DModels(true);
+        console.log("Enabling 3D models after loading screen dismissed");
+      }, 500);
+      
+      return () => clearTimeout(timer);
     }
   }, [mainLoaderActive, loaderDismissed]);
   
@@ -322,8 +332,70 @@ export default function HomePage() {
     }
   }, [products, loading]);
   
+  // Rotate featured product every 10 seconds
+  useEffect(() => {
+    if (displayedProducts.length > 0 && show3DModels) {
+      const interval = setInterval(() => {
+        setFeaturedProductId(prev => {
+          const next = (prev % displayedProducts.length) + 1;
+          console.log(`Changing featured product to ID: ${next}`);
+          return next;
+        });
+      }, 10000);
+      
+      return () => clearInterval(interval);
+    }
+  }, [displayedProducts, show3DModels]);
+  
   return (
     <div className="container mx-auto px-4 pb-12">
+      {/* Featured Product with 3D Model */}
+      {!loading && displayedProducts.length > 0 && show3DModels && (
+        <section className="py-8 my-4">
+          <div className="bg-gray-50 rounded-xl shadow-lg overflow-hidden">
+            <div className="container mx-auto px-4 py-8">
+              <h2 className="text-3xl font-bold mb-6 text-center text-gray-800">Featured Cake</h2>
+              <div className="flex flex-col md:flex-row items-center">
+                {/* 3D Model Display */}
+                <div className="md:w-1/2 h-80 relative mb-6 md:mb-0">
+                  <div className="w-full h-full flex items-center justify-center" style={{ 
+                    background: 'radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(240,240,245,1) 100%)'
+                  }}>
+                    <ModelCanvasInstance 
+                      productId={featuredProductId} 
+                      isHovered={false} 
+                      fallbackText="Experience our 3D cakes on the product page!"
+                    />
+                  </div>
+                </div>
+                {/* Product Info */}
+                <div className="md:w-1/2 md:pl-8">
+                  <h3 className="text-2xl font-bold text-gray-800 mb-3">
+                    {displayedProducts[featuredProductId % displayedProducts.length]?.title || "Delicious Cake"}
+                  </h3>
+                  <p className="text-gray-600 mb-4">
+                    {displayedProducts[featuredProductId % displayedProducts.length]?.description || 
+                      "Handcrafted with love and the finest ingredients for your special occasions."}
+                  </p>
+                  <p className="text-xl font-semibold text-pink-600 mb-6">
+                    ${parseFloat(displayedProducts[featuredProductId % displayedProducts.length]?.variants[0].price || "29.99").toFixed(2)}
+                  </p>
+                  <Link 
+                    to={`/product/${
+                      displayedProducts[featuredProductId % displayedProducts.length]?.handle || 
+                      `product-${featuredProductId}`
+                    }`}
+                    className="inline-block bg-pink-500 text-white font-medium px-6 py-3 rounded-md hover:bg-pink-600 transition shadow-sm"
+                  >
+                    View Details
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+      
       {/* Product Grid Section */}
       <section className="py-12">
         <div className="container mx-auto px-4">
@@ -481,7 +553,15 @@ function RotatingModel({ url, rotateRight, onLoadFailed }: {
 }
 
 // Model canvas instance component to render a single 3D model
-function ModelCanvasInstance({ productId, isHovered }: { productId: number, isHovered: boolean }) {
+function ModelCanvasInstance({ 
+  productId, 
+  isHovered, 
+  fallbackText = "Too many 3D models active" 
+}: { 
+  productId: number, 
+  isHovered: boolean, 
+  fallbackText?: string 
+}) {
   const { isMobile, dpr } = getDeviceCapabilities();
   const [modelError, setModelError] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
@@ -506,10 +586,11 @@ function ModelCanvasInstance({ productId, isHovered }: { productId: number, isHo
       return () => clearTimeout(timer);
     }
   }, [productId, retryCount]);
-
-  const handleModelLoaded = useCallback(() => {
-    console.log(`Model loaded successfully for product ${productId}`);
-    setModelLoaded(true);
+  
+  // Clear error state when product changes
+  useEffect(() => {
+    setModelError(false);
+    setRetryCount(0);
   }, [productId]);
   
   // Handle WebGL context management
@@ -532,7 +613,7 @@ function ModelCanvasInstance({ productId, isHovered }: { productId: number, isHo
   if (!WebGLContextManager.canCreateContext()) {
     return (
       <div className="flex items-center justify-center w-full h-full bg-gray-100">
-        <p className="text-sm text-gray-500">Too many 3D models active</p>
+        <p className="text-sm text-gray-500">{fallbackText}</p>
       </div>
     );
   }
