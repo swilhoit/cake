@@ -135,11 +135,36 @@ function Model({
   // Limit the model number to 1-8 (available models)
   const modelNum = (!isNaN(idNum) && idNum > 0) ? ((idNum - 1) % 8) + 1 : 1;
   
-  // Set the model path to use the numbered models (1-8)
+  // Set the model path with fallback options
   const modelPath = useMemo(() => {
     // Always use the numbered model, but cycle through 1-8 for higher IDs
-    return `https://storage.googleapis.com/kgbakerycakes/cake_model_${modelNum}.glb`;
+    const isProduction = window.location.hostname.includes('vercel.app');
+    const availableLocalModels = ['model.glb', 'cake_model_low.glb', 'cake_model_2.glb', 'cake_model_very_low.glb'];
+    
+    if (isProduction) {
+      // Try to match a specific model if available
+      const specificModelPath = `/models/cake_model_${modelNum}.glb`;
+      
+      // Default to one of the available models if specific one isn't available
+      // Use a consistent mapping based on modelNum to always use the same fallback for the same product
+      const fallbackModel = availableLocalModels[modelNum % availableLocalModels.length];
+      const fallbackPath = `/models/${fallbackModel}`;
+      
+      console.log(`Production environment detected - trying model ${specificModelPath}, with fallback to ${fallbackPath}`);
+      
+      // We'll try the specific model first, and if that fails, Three.js will try the fallback
+      // This is handled in the error callback of useGLTF
+      return specificModelPath;
+    } 
+    
+    // In development, use Google Cloud Storage
+    const path = `https://storage.googleapis.com/kgbakerycakes/cake_model_${modelNum}.glb`;
+    console.log(`Development environment - loading model from Google Cloud Storage: ${path}`);
+    return path;
   }, [modelNum]);
+  
+  // Track whether we're using the fallback model
+  const [usingFallback, setUsingFallback] = useState(false);
   
   // Calculate variant-specific transformations based on ID
   const variantProps = useMemo(() => ({
@@ -176,10 +201,28 @@ function Model({
   
   // Create error handling function that's stable between renders  
   const handleError = useCallback((error: any) => {
-    console.warn(`Error loading model from ${modelPath}:`, error);
+    console.error(`Failed to load model from ${modelPath}:`, error);
+    
+    // If we're in production and not already using a fallback, try a fallback model
+    const isProduction = window.location.hostname.includes('vercel.app');
+    if (isProduction && !usingFallback) {
+      setUsingFallback(true);
+      
+      // Use a consistent fallback model based on the modelNum
+      const availableLocalModels = ['model.glb', 'cake_model_low.glb', 'cake_model_2.glb', 'cake_model_very_low.glb'];
+      const fallbackModel = availableLocalModels[modelNum % availableLocalModels.length];
+      const fallbackPath = `/models/${fallbackModel}`;
+      
+      console.log(`Trying fallback model: ${fallbackPath}`);
+      // This will trigger a re-render with a new model path
+      return;
+    }
+    
+    // If we've already tried fallback or not in production, show the fallback box
+    console.error(`All fallback attempts failed, showing fallback box`);
     setShowFallback(true);
     onError(`Could not load cake model: ${error && typeof error === 'object' ? String(error) : 'Unknown error'}`);
-  }, [modelPath, onError]);
+  }, [modelPath, usingFallback, modelNum, onError]);
 
   // Create success handling function that's stable between renders
   const handleLoad = useCallback(() => {
@@ -188,7 +231,18 @@ function Model({
   }, [onLoad]);
   
   // Load model with error handling
-  const { scene } = useGLTF(modelPath);
+  const modelUrl = usingFallback ? 
+    `/models/${['model.glb', 'cake_model_low.glb', 'cake_model_2.glb', 'cake_model_very_low.glb'][modelNum % 4]}` : 
+    modelPath;
+  
+  const { scene } = useGLTF(modelUrl);
+  
+  // Update error handler to watch for changes to scene
+  useEffect(() => {
+    if (!scene && !showFallback) {
+      handleError("Scene failed to load");
+    }
+  }, [scene, handleError, showFallback]);
   
   // Clone the model when it loads successfully
   const model = useMemo(() => {
