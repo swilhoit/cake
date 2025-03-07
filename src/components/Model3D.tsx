@@ -158,11 +158,22 @@ function Model({
   
   // Set the model path - Always use Google Cloud Storage for consistent behavior
   const modelPath = useMemo(() => {
-    // Using optimized models from the optimized directory
-    const path = `https://storage.googleapis.com/kgbakerycakes/optimized/cake_model_${modelNum}.glb`;
-    console.log(`Loading model from: ${path}`);
+    // Map model number to specific character models in the optimized directory
+    const characterModels = [
+      'nemo.glb',         // ID 1 or ID % 5 = 1
+      'princess.glb',     // ID 2 or ID % 5 = 2
+      'spongebob1.glb',   // ID 3 or ID % 5 = 3
+      'strawberry.glb',   // ID 4 or ID % 5 = 4
+      'turkey.glb'        // ID 5 or ID % 5 = 0
+    ];
+
+    // Get model file based on product ID (modulo operator ensures we stay within bounds)
+    const modelIndex = (idNum - 1) % characterModels.length;
+    const modelFile = characterModels[modelIndex];
+    const path = `https://storage.googleapis.com/kgbakerycakes/optimized/${modelFile}`;
+    console.log(`Loading character model from: ${path}`);
     return path;
-  }, [modelNum]);
+  }, [idNum]);
   
   // Calculate variant-specific transformations based on ID
   const variantProps = useMemo(() => ({

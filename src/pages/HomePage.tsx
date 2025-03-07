@@ -356,19 +356,23 @@ export default function HomePage() {
   );
 }
 
-// Smaller Banh Mi model optimized for the marquee
+// Smaller character model optimized for the marquee
 function BanhMiModelSmall({ rotateRight }: { rotateRight: boolean }) {
   // Minimal state management
   const [modelError, setModelError] = useState(false);
   
   // Simple error handler
   const handleModelError = () => {
-    console.error("BanhMi model failed to load");
+    console.error("Character model failed to load");
     setModelError(true);
   };
   
-  // Using optimized model from the optimized directory
-  const modelUrl = "https://storage.googleapis.com/kgbakerycakes/optimized/banhmi.glb";
+  // Using optimized model from the optimized directory - randomly choosing one
+  const characterModels = ['nemo.glb', 'princess.glb', 'spongebob1.glb', 'strawberry.glb', 'turkey.glb'];
+  // Create a deterministic "random" selection based on time of day to avoid excessive changing
+  const hourOfDay = new Date().getHours();
+  const modelIndex = hourOfDay % characterModels.length;
+  const modelUrl = `https://storage.googleapis.com/kgbakerycakes/optimized/${characterModels[modelIndex]}`;
   
   // Simple Canvas with minimal configuration
   return (
