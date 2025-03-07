@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Suspense, useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useShopContext } from '../context/ShopContext';
 import { Canvas, useFrame } from '@react-three/fiber';
@@ -130,6 +130,7 @@ function ProductCard({ product }: { product: any }) {
   const [useFallbackImage, setUseFallbackImage] = useState(false);
   const { isMobile, shouldUseImages, dpr } = getDeviceCapabilities();
   const [retryCount, setRetryCount] = useState(0);
+  const navigate = useNavigate();
 
   // Extract product ID from the Shopify handle or use a default ID
   const productId = product.id ? parseInt(product.id.split('/').pop() || '1', 10) : 1;
@@ -199,83 +200,107 @@ function ProductCard({ product }: { product: any }) {
     return placeholders[productId % placeholders.length];
   };
 
+  // Navigate to the product page
+  const goToProductPage = () => {
+    navigate(`/product/${product.id.split('/').pop()}`);
+  };
+
   return (
-    <Link to={`/product/${product.id.split('/').pop()}`} className="block">
-      <div className="transition-all duration-300">
-        {/* 3D Model Container - No background, no borders, no shadows */}
-        <div className="relative h-80 w-full">
-          {useFallbackImage ? (
+    <div className="transition-all duration-300">
+      {/* Product Info Bar - Clickable */}
+      <div 
+        onClick={goToProductPage}
+        className="bg-white shadow-sm rounded-t-lg p-4 cursor-pointer hover:bg-gray-50"
+      >
+        <h3 className="text-lg font-medium text-gray-900">{product.title}</h3>
+        <p className="text-sm text-gray-600 mt-1">${product.variants[0].price}</p>
+      </div>
+      
+      {/* 3D Model Container - Interactive, not wrapped in Link */}
+      <div className="relative h-80 w-full bg-gray-50 rounded-b-lg">
+        {useFallbackImage ? (
+          <div onClick={goToProductPage} className="w-full h-full cursor-pointer">
             <img 
               src={getFallbackImageUrl()} 
               alt={product.title} 
               className="w-full h-full object-contain"  
             />
-          ) : isVisible && (
-            <Canvas
-              camera={{ position: [0, 0, 4.0], fov: 30 }}
-              dpr={dpr}
-              gl={{ 
-                antialias: true,
-                alpha: true,
-                preserveDrawingBuffer: true,
-                powerPreference: 'default',
-                depth: true
-              }}
-              className="touch-auto"
-              style={{ 
-                background: 'transparent',
-                touchAction: 'none'
-              }}
-              onCreated={({ gl }) => {
-                // Set clear color with full transparency
-                gl.setClearColor(0x000000, 0);
-              }}
-            >
-              <ambientLight intensity={0.8} />
-              <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} intensity={1} castShadow />
-              
-              <Suspense fallback={
+          </div>
+        ) : isVisible && (
+          <Canvas
+            camera={{ position: [0, 0, 4.0], fov: 30 }}
+            dpr={dpr}
+            gl={{ 
+              antialias: true,
+              alpha: true,
+              preserveDrawingBuffer: true,
+              powerPreference: 'default',
+              depth: true
+            }}
+            className="touch-auto"
+            style={{ 
+              background: 'transparent',
+              touchAction: 'none'
+            }}
+            onCreated={({ gl }) => {
+              // Set clear color with full transparency
+              gl.setClearColor(0x000000, 0);
+            }}
+          >
+            <ambientLight intensity={0.8} />
+            <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} intensity={1} castShadow />
+            
+            <Suspense fallback={
+              <Html center>
+                <div className="flex items-center justify-center">
+                  <div className="text-sm text-blue-500 px-3 py-2 rounded-full" style={{ background: 'transparent' }}>
+                    Loading model...
+                  </div>
+                </div>
+              </Html>
+            }>
+              {!modelError ? (
+                <>
+                  <Model3D 
+                    scale={1.3} 
+                    rotationSpeed={isMobile ? 0.003 : 0.005} 
+                    productId={productId} 
+                  />
+                  {!isMobile && <Environment preset="city" />}
+                </>
+              ) : (
                 <Html center>
                   <div className="flex items-center justify-center">
-                    <div className="text-sm text-blue-500 px-3 py-2 rounded-full" style={{ background: 'transparent' }}>
-                      Loading cake model...
+                    <div className="text-sm text-red-500 px-3 py-2 rounded-full" style={{ background: 'transparent' }}>
+                      Failed to load model
                     </div>
                   </div>
                 </Html>
-              }>
-                {!modelError ? (
-                  <>
-                    <Model3D 
-                      scale={1.3} 
-                      rotationSpeed={isMobile ? 0.003 : 0.005} 
-                      productId={productId} 
-                    />
-                    {!isMobile && <Environment preset="city" />}
-                  </>
-                ) : (
-                  <Html center>
-                    <div className="flex items-center justify-center">
-                      <div className="text-sm text-red-500 px-3 py-2 rounded-full" style={{ background: 'transparent' }}>
-                        Failed to load model
-                      </div>
-                    </div>
-                  </Html>
-                )}
-              </Suspense>
-              
-              <OrbitControls
-                enableZoom={false}
-                maxPolarAngle={Math.PI / 2}
-                minPolarAngle={0}
-                rotateSpeed={0.5}
-                enableDamping={isMobile ? false : true}
-                dampingFactor={0.1}
-              />
-            </Canvas>
-          )}
+              )}
+            </Suspense>
+            
+            <OrbitControls
+              enableZoom={false}
+              maxPolarAngle={Math.PI / 2}
+              minPolarAngle={0}
+              rotateSpeed={0.5}
+              enableDamping={isMobile ? false : true}
+              dampingFactor={0.1}
+            />
+          </Canvas>
+        )}
+        
+        {/* View Details button - overlay on the model */}
+        <div className="absolute bottom-4 left-0 right-0 flex justify-center">
+          <button 
+            onClick={goToProductPage}
+            className="px-4 py-2 bg-white/80 backdrop-blur-sm text-pink-600 rounded-full text-sm font-medium shadow-sm hover:bg-white hover:shadow transition-all"
+          >
+            View Details
+          </button>
         </div>
       </div>
-    </Link>
+    </div>
   );
 }
 
