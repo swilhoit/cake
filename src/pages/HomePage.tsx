@@ -110,12 +110,9 @@ const getDeviceCapabilities = (): { isMobile: boolean, shouldUseImages: boolean,
   // Check for device memory (in GB)
   const deviceMemory = (navigator as any).deviceMemory || 0;
   
-  // Always use images in deployed environment to avoid potential CORS issues
-  const isDeployedEnvironment = window.location.hostname.includes('vercel.app');
-  
-  // Determine if we should use images instead of 3D models
+  // Determine if we should use images instead of 3D models based on device capability
+  // We've fixed the model loading, so we no longer need to force images in production
   const shouldUseImages = 
-    isDeployedEnvironment || // Always use images in production for now
     isMobile && (
       cpuCores < 4 || 
       deviceMemory < 2 || 

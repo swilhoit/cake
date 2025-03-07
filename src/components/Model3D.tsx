@@ -139,22 +139,11 @@ function Model({
   const modelPath = useMemo(() => {
     // Always use the numbered model, but cycle through 1-8 for higher IDs
     const isProduction = window.location.hostname.includes('vercel.app');
-    const availableLocalModels = ['model.glb', 'cake_model_low.glb', 'cake_model_2.glb', 'cake_model_very_low.glb'];
     
     if (isProduction) {
-      // Try to match a specific model if available
-      const specificModelPath = `/models/cake_model_${modelNum}.glb`;
-      
-      // Default to one of the available models if specific one isn't available
-      // Use a consistent mapping based on modelNum to always use the same fallback for the same product
-      const fallbackModel = availableLocalModels[modelNum % availableLocalModels.length];
-      const fallbackPath = `/models/${fallbackModel}`;
-      
-      console.log(`Production environment detected - trying model ${specificModelPath}, with fallback to ${fallbackPath}`);
-      
-      // We'll try the specific model first, and if that fails, Three.js will try the fallback
-      // This is handled in the error callback of useGLTF
-      return specificModelPath;
+      // In production, always use the only model we know is working
+      console.log('Production environment detected - using main model.glb');
+      return '/models/model.glb';
     } 
     
     // In development, use Google Cloud Storage
@@ -203,26 +192,21 @@ function Model({
   const handleError = useCallback((error: any) => {
     console.error(`Failed to load model from ${modelPath}:`, error);
     
-    // If we're in production and not already using a fallback, try a fallback model
-    const isProduction = window.location.hostname.includes('vercel.app');
-    if (isProduction && !usingFallback) {
+    // If we're already showing the fallback, no need to try again
+    if (showFallback) return;
+    
+    // Always try the main model.glb as fallback
+    if (!usingFallback) {
       setUsingFallback(true);
-      
-      // Use a consistent fallback model based on the modelNum
-      const availableLocalModels = ['model.glb', 'cake_model_low.glb', 'cake_model_2.glb', 'cake_model_very_low.glb'];
-      const fallbackModel = availableLocalModels[modelNum % availableLocalModels.length];
-      const fallbackPath = `/models/${fallbackModel}`;
-      
-      console.log(`Trying fallback model: ${fallbackPath}`);
-      // This will trigger a re-render with a new model path
+      console.log('Trying fallback model: /models/model.glb');
       return;
     }
     
-    // If we've already tried fallback or not in production, show the fallback box
-    console.error(`All fallback attempts failed, showing fallback box`);
+    // If fallback also failed, show the simple box
+    console.error('All fallback attempts failed, showing fallback box');
     setShowFallback(true);
     onError(`Could not load cake model: ${error && typeof error === 'object' ? String(error) : 'Unknown error'}`);
-  }, [modelPath, usingFallback, modelNum, onError]);
+  }, [modelPath, usingFallback, showFallback, onError]);
 
   // Create success handling function that's stable between renders
   const handleLoad = useCallback(() => {
@@ -231,9 +215,7 @@ function Model({
   }, [onLoad]);
   
   // Load model with error handling
-  const modelUrl = usingFallback ? 
-    `/models/${['model.glb', 'cake_model_low.glb', 'cake_model_2.glb', 'cake_model_very_low.glb'][modelNum % 4]}` : 
-    modelPath;
+  const modelUrl = usingFallback ? '/models/model.glb' : modelPath;
   
   const { scene } = useGLTF(modelUrl);
   
