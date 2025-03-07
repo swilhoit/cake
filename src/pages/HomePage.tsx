@@ -111,12 +111,10 @@ const getDeviceCapabilities = (): { isMobile: boolean, shouldUseImages: boolean,
   const deviceMemory = (navigator as any).deviceMemory || 0;
   
   // Determine if we should use images instead of 3D models based on device capability
-  // No longer force images in production environment - use device capability checks instead
+  // Be EXTRA conservative with low-end devices ONLY
   const shouldUseImages = 
-    // Be conservative with mobile devices with low specs
-    (isMobile && (cpuCores < 4 || deviceMemory < 2)) || 
-    // Be conservative with low-end desktop devices
-    (!isMobile && (cpuCores < 4 || deviceMemory < 2));
+    // Use images only for very low-end devices (1-2 cores, <1GB RAM)
+    (cpuCores < 2 || deviceMemory < 1);
   
   // Set appropriate device pixel ratio based on device capability
   const dpr: [number, number] = isMobile ? [1, 1.5] : [1, 2];
@@ -160,16 +158,21 @@ function ProductCard({ product }: { product: any }) {
     console.log(`Model error for product ${productId}, retry: ${retryCount}`);
     setModelError(true);
     
-    // Try up to 2 times to reload the model with increasing delays
-    if (retryCount < 2) {
-      const retryDelay = (retryCount + 1) * 1000; // 1s, then 2s
+    // In production with CORS errors, try a couple of times then fallback
+    const maxRetries = 3;
+    
+    // Try several times to load the model with increasing delays
+    if (retryCount < maxRetries) {
+      const retryDelay = (retryCount + 1) * 500; // 500ms, 1000ms, 1500ms
       
       setTimeout(() => {
+        console.log(`Retrying model load for product ${productId}, attempt ${retryCount + 1}/${maxRetries}`);
         setModelError(false);
         setRetryCount(prev => prev + 1);
       }, retryDelay);
     } else {
       // After retries, fall back to image
+      console.log(`Falling back to image for product ${productId} after ${maxRetries} failed attempts`);
       setUseFallbackImage(true);
     }
   };
@@ -362,13 +365,17 @@ function BanhMiModelSmall({ rotateRight }: { rotateRight: boolean }) {
     console.error("BanhMi model failed to load");
     setModelError(true);
     
+    // In production, only do a single retry attempt to prevent excessive requests
+    const maxRetries = typeof window !== 'undefined' && 
+                      window.location.hostname.includes('vercel.app') ? 0 : 1;
+    
     // Implement retry logic with short delays
-    if (retryCount < 2) { // Reduce retry count to avoid too many WebGL contexts
+    if (retryCount < maxRetries) {
       const delay = 500 * (retryCount + 1);
-      console.log(`Retrying BanhMi model in ${delay}ms (attempt ${retryCount + 1}/2)`);
+      console.log(`Retrying BanhMi model in ${delay}ms (attempt ${retryCount + 1}/${maxRetries + 1})`);
       
       setTimeout(() => {
-        console.log(`Retrying BanhMi model now (attempt ${retryCount + 1}/2)`);
+        console.log(`Retrying BanhMi model now (attempt ${retryCount + 1}/${maxRetries + 1})`);
         setModelError(false);
         setRetryCount(prev => prev + 1);
       }, delay);
