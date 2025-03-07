@@ -5,6 +5,8 @@ import * as THREE from 'three';
 import { mainLoaderActive } from './LoadingScreen';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { TextureLoader } from 'three';
+import { useLoader } from '@react-three/fiber';
 
 // Loading indicator component without text
 function ModelLoader() {
@@ -67,7 +69,21 @@ function modelPreloader() {
         return Promise.resolve(loadedModels.get(url));
       }
 
-      console.log(`Preloading model: ${url}`);
+      // Determine if we should use local models first in development
+      let modelUrl = url;
+      let isCloudUrl = url.includes('storage.googleapis.com');
+      
+      // Extract the filename for potential local fallback
+      const fileName = url.split('/').pop();
+      const localModelUrl = fileName ? `/models/${fileName}` : null;
+
+      // In development, prefer local models directly to avoid CORS issues
+      if (isDevelopment && isCloudUrl && localModelUrl) {
+        console.log(`Development mode: Using local model path first: ${localModelUrl}`);
+        modelUrl = localModelUrl;
+      }
+      
+      console.log(`Preloading model: ${modelUrl}`);
       
       const loader = new GLTFLoader();
       
@@ -76,83 +92,70 @@ function modelPreloader() {
         const onProgress = (event: ProgressEvent) => {
           if (event.lengthComputable) {
             const percentComplete = (event.loaded / event.total) * 100;
-            console.log(`Model ${url} loading: ${Math.round(percentComplete)}%`);
+            console.log(`Model ${modelUrl} loading: ${Math.round(percentComplete)}%`);
           }
         };
-
-        // For development, use a CORS proxy or switch to local assets
-        let modelUrl = url;
-        if (isDevelopment && url.includes('storage.googleapis.com')) {
-          // In development, switch to local assets if available
-          const fileName = url.split('/').pop();
-          if (fileName) {
-            modelUrl = `/models/${fileName}`;
-            console.log(`Development mode: Using local model path: ${modelUrl}`);
-          }
-        }
 
         // Maximum retry count to prevent infinite retries
         let retryCount = 0;
         const maxRetries = 3;
         const retryDelay = 1500; // 1.5 seconds between retries
 
-        const attemptLoad = () => {
+        // Try to load with a specific URL and fall back if needed
+        const attemptLoadWithFallback = (currentUrl: string, fallbackUrl: string | null = null, isRetry: boolean = false) => {
+          console.log(`Loading model from: ${currentUrl}${isRetry ? " (retry attempt)" : ""}`);
+          
           loader.load(
-            modelUrl,
+            currentUrl,
             (gltf) => {
-              console.log(`Model loaded successfully: ${url}`);
-              
-              // Store the loaded model in our cache
-              loadedModels.set(url, gltf);
-              
-              // Remove the loading promise reference
-              loadingPromises.delete(url);
-              
+              console.log(`Successfully loaded model: ${currentUrl}`);
+              loadedModels.set(url, gltf); // Store with the original requested URL
               resolve(gltf);
             },
             onProgress,
-            (error) => {
-              console.error(`Error loading model ${url}:`, error);
+            (error: any) => {
+              const errorMsg = error.message || String(error);
+              console.error(`Error loading model ${currentUrl}: ${errorMsg}`);
               
-              if (retryCount < maxRetries) {
+              // If we have a fallback URL and this isn't already a fallback attempt
+              if (fallbackUrl && !isRetry) {
+                console.log(`Attempting fallback to: ${fallbackUrl}`);
+                attemptLoadWithFallback(fallbackUrl, null, false);
+              } 
+              // Otherwise try to retry this URL a few times
+              else if (retryCount < maxRetries) {
                 retryCount++;
                 console.log(`Retrying model load in ${retryDelay}ms (attempt ${retryCount}/${maxRetries})`);
-                setTimeout(attemptLoad, retryDelay);
-              } else {
-                // If we've exhausted retries, try a local fallback for development
-                if (isDevelopment && !modelUrl.startsWith('/models/')) {
-                  const fileName = url.split('/').pop();
-                  if (fileName) {
-                    const localUrl = `/models/${fileName}`;
-                    console.log(`Falling back to local model: ${localUrl}`);
-                    modelUrl = localUrl;
-                    retryCount = 0; // Reset retry count for the new URL
-                    setTimeout(attemptLoad, 0); // Immediately try the local URL
-                    return;
-                  }
-                }
-                
-                // All retries failed, reject the promise
-                loadingPromises.delete(url);
+                setTimeout(() => attemptLoadWithFallback(currentUrl, null, true), retryDelay);
+              } 
+              // If we've exhausted all options, reject with a clear error
+              else {
+                console.error(`Failed to load model after all attempts: ${url}`);
                 reject(new Error(`Failed to load model: ${url}`));
               }
             }
           );
         };
 
-        // Start loading
-        attemptLoad();
+        // Start the loading process with potential fallback
+        if (isDevelopment && isCloudUrl && localModelUrl !== modelUrl) {
+          // In development, try cloud URL with local fallback
+          attemptLoadWithFallback(modelUrl, localModelUrl);
+        } else {
+          // Standard loading without fallback or already using local URL
+          attemptLoadWithFallback(modelUrl);
+        }
       });
 
-      // Store the promise for this URL
+      // Store the promise so we don't start multiple loads for the same model
       loadingPromises.set(url, loadPromise);
       
-      // Return the promise for this model load
-      return loadPromise.catch(error => {
-        console.error(`Failed to preload model: ${url}`, error);
+      // When the promise resolves or rejects, remove it from the loading promises
+      loadPromise.finally(() => {
         loadingPromises.delete(url);
-        throw error;
       });
+      
+      return loadPromise;
     },
     
     isLoaded: (url: string): boolean => {
@@ -257,7 +260,27 @@ export default function Model3D({
   );
 }
 
-// Modify the Model function to handle the async loading properly
+// Get a cake variant name based on ID number for visual differentiation
+function getCakeVariantName(id: number): string {
+  // These names should match filenames in your /public/models/ directory
+  // Make sure to place GLB files with these exact names there for development
+  const availableModels = [
+    "nemo",      // These models are confirmed to work
+    "strawberry",
+    "princess",
+    "spongebob1",
+    "turkey"
+  ];
+  
+  // We now use a simple mapping based on ID mod length of available models
+  const index = (id - 1) % availableModels.length;
+  const modelName = availableModels[index];
+  
+  console.log(`Using model "${modelName}" for product ID ${id}`);
+  return modelName;
+}
+
+// Update the Model component to use fallback images when models fail to load
 function Model({ 
   scale, 
   rotationSpeed, 
@@ -279,15 +302,19 @@ function Model({
 }) {
   const [isPreloaded, setIsPreloaded] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [shouldShowFallbackImage, setShouldShowFallbackImage] = useState<boolean>(false);
   
   // Get variant name based on the product ID
-  const variantName = productId ? getCakeVariantName(Number(productId)) : 'default';
+  const variantName = productId ? getCakeVariantName(Number(productId)) : 'nemo';
   
   // Properly URL encode the variant name for the model URL
   const encodedVariantName = encodeURIComponent(variantName);
   
   // Construct the model URL with proper encoding
   const modelUrl = `https://storage.googleapis.com/kgbakerycakes/optimized/${encodedVariantName}.glb`;
+  
+  // Fallback image URL - use when 3D models fail to load
+  const fallbackImageUrl = productId ? `/images/cakes/${variantName}.jpg` : '/images/cakes/default.jpg';
   
   // Log the final URL for debugging
   useEffect(() => {
@@ -300,86 +327,63 @@ function Model({
     
     console.log(`Starting preload for: ${modelUrl}`);
     
+    // Try to preload the model
     preloader.preload(modelUrl)
       .then(() => {
         if (isMounted) {
           console.log(`Model preloaded successfully: ${modelUrl}`);
           setIsPreloaded(true);
+          setShouldShowFallbackImage(false);
         }
       })
       .catch((err) => {
         if (isMounted) {
           const errorMessage = `Error preloading model: ${err.message || 'Unknown error'}`;
           console.error(errorMessage);
+          setError(errorMessage);
+          onError(errorMessage);
           
-          // Try the local fallback when in development
-          if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-            console.log(`Attempting local fallback for: ${variantName}`);
-            const localModelUrl = `/models/${encodedVariantName}.glb`;
-            
-            // Retry with local model path
-            preloader.preload(localModelUrl)
-              .then(() => {
-                if (isMounted) {
-                  console.log(`Local model preloaded successfully: ${localModelUrl}`);
-                  setIsPreloaded(true);
-                }
-              })
-              .catch((localErr) => {
-                if (isMounted) {
-                  const fullError = `Failed to load model from cloud and local fallback: ${localErr.message}`;
-                  console.error(fullError);
-                  setError(fullError);
-                  onError(fullError);
-                }
-              });
-          } else {
-            setError(errorMessage);
-            onError(errorMessage);
-          }
+          // Show fallback image after all attempts failed
+          setShouldShowFallbackImage(true);
         }
       });
     
     return () => {
       isMounted = false;
     };
-  }, [modelUrl, onError, variantName]);
-  
-  // Declare model loader to only use when preloaded
-  let gltf: GLTF | null = null;
-  
-  // Only try to load the model with useGLTF when it's preloaded
-  if (isPreloaded) {
-    try {
-      gltf = useGLTF(modelUrl) as unknown as GLTF;
-    } catch (loadError) {
-      if (!error) {
-        console.error(`Error loading model with useGLTF: ${loadError}`);
-        setError(`Failed to load model: ${loadError}`);
-        onError(`Failed to load model: ${loadError}`);
-      }
-    }
+  }, [modelUrl, onError]);
+
+  // If showing fallback image instead of 3D model
+  if (shouldShowFallbackImage) {
+    console.log(`Using fallback image: ${fallbackImageUrl}`);
+    return (
+      <mesh>
+        <planeGeometry args={[2 * scale, 2 * scale]} />
+        <meshBasicMaterial>
+          <Texture url={fallbackImageUrl} />
+        </meshBasicMaterial>
+      </mesh>
+    );
   }
 
-  // Notify the parent when the model is successfully loaded
-  useEffect(() => {
-    if (gltf && isPreloaded && !error) {
-      onLoad();
-    }
-  }, [gltf, isPreloaded, error, onLoad]);
-
+  // Declare model loader to only use when preloaded
   const groupRef = useRef<THREE.Group>(null);
-  
-  useFrame((state, delta) => {
-    if (groupRef.current && !error && gltf) {
+  const { scene: gltf } = useGLTF(modelUrl);
+
+  // Handle rotation animation
+  useFrame(() => {
+    if (groupRef.current) {
       groupRef.current.rotation.y += rotationSpeed;
     }
   });
 
-  if (error) {
-    return null;
-  }
-  
+  // Call onLoad once the model is ready
+  useEffect(() => {
+    if (isPreloaded && !error) {
+      onLoad();
+    }
+  }, [isPreloaded, onLoad, error]);
+
   if (!isPreloaded || !gltf) {
     // Return an empty group while loading
     return <group />;
@@ -387,30 +391,13 @@ function Model({
 
   return (
     <group ref={groupRef} scale={[scale, scale, scale]}>
-      <primitive object={gltf.scene} />
+      <primitive object={gltf} />
     </group>
   );
 }
 
-// Get a cake variant name based on ID number for visual differentiation
-function getCakeVariantName(id: number): string {
-  // UPDATED: Map product IDs to known existing model names in the bucket
-  // Based on our checks, we know nemo.glb exists
-  // We'll use models that we know exist in the bucket
-  const cakeVariants: Record<number, string> = {
-    1: "nemo",
-    2: "nemo", // Replace with "princess" when model exists
-    3: "nemo", // Replace with "spongebob1" when model exists  
-    4: "nemo", // Replace with "strawberry" when model exists
-    5: "nemo", // Replace with "turkey" when model exists
-    6: "nemo", // Replace with actual models when they exist
-    7: "nemo", 
-    8: "nemo", 
-    9: "nemo",
-    10: "nemo"
-  };
-  
-  // Use nemo for all products since we know it exists
-  console.log(`Retrieved cake variant for ID ${id}: Using "nemo" as fallback until all models are uploaded`);
-  return "nemo";
+// Texture component for fallback images
+function Texture({ url }: { url: string }) {
+  const texture = useLoader(TextureLoader, url);
+  return <primitive attach="map" object={texture} />;
 } 
