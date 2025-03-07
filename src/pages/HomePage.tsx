@@ -358,79 +358,31 @@ export default function HomePage() {
 
 // Smaller Banh Mi model optimized for the marquee
 function BanhMiModelSmall({ rotateRight }: { rotateRight: boolean }) {
-  // State for model loading
-  const [modelLoaded, setModelLoaded] = useState(false);
+  // Minimal state management
   const [modelError, setModelError] = useState(false);
-  const [retryCount, setRetryCount] = useState(0);
   
-  // Enhanced error handling for the Banh Mi model
-  const handleModelError = useCallback(() => {
-    console.error("BanhMi model failed to load - retrying");
+  // Simple error handler
+  const handleModelError = () => {
+    console.error("BanhMi model failed to load");
     setModelError(true);
-    
-    // Reset and try again regardless of environment
-    if (retryCount < 3) {
-      const delay = 500;
-      console.log(`Retrying BanhMi model in ${delay}ms (attempt ${retryCount + 1}/3)`);
-      
-      setTimeout(() => {
-        console.log(`Retrying BanhMi model now (attempt ${retryCount + 1}/3)`);
-        setModelError(false);
-        setRetryCount(prev => prev + 1);
-      }, delay);
-    }
-  }, [retryCount]);
+  };
   
-  // Reset error state when component mounts
-  useEffect(() => {
-    setModelError(false);
-    setRetryCount(0);
-  }, []);
+  // Direct URL to the Banh Mi model - no timestamp or other modifications
+  const modelUrl = "https://storage.googleapis.com/kgbakerycakes/banhmi.glb";
   
-  // Use direct URL to the Banh Mi model with cache busting
-  const modelUrl = useMemo(() => {
-    const timestamp = Date.now();
-    return `https://storage.googleapis.com/kgbakerycakes/banhmi.glb?t=${timestamp}`;
-  }, []);
-  
-  // Memoize the Canvas component to prevent unnecessary re-renders
-  return useMemo(() => (
+  // Simple Canvas with minimal configuration
+  return (
     <Canvas
       camera={{ position: [0, 0, 4.0], fov: 30 }}
       gl={{ 
         antialias: true,
-        alpha: true,
-        preserveDrawingBuffer: true,
-        powerPreference: 'default',
-        depth: true
+        alpha: true
       }}
-      className="touch-auto"
-      style={{ 
-        background: 'transparent',
-        touchAction: 'none'
-      }}
-      onCreated={({ gl }) => {
-        // Set clear color with full transparency
-        gl.setClearColor(0x000000, 0);
-      }}
-      // Enable continuous rendering for rotation animation
-      frameloop="always"
+      style={{ background: 'transparent' }}
     >
-      {/* Improved lighting setup */}
+      {/* Basic lighting */}
       <ambientLight intensity={0.8} />
-      <spotLight 
-        position={[5, 10, 5]} 
-        angle={0.4} 
-        penumbra={1} 
-        intensity={2.5}
-        castShadow 
-        color="#ffffff"
-      />
-      <directionalLight
-        position={[0, 5, 5]}
-        intensity={1.0}
-        color="#ffffff"
-      />
+      <spotLight position={[5, 10, 5]} intensity={1.5} />
       
       <Suspense fallback={null}>
         <RotatingModel 
@@ -440,96 +392,42 @@ function BanhMiModelSmall({ rotateRight }: { rotateRight: boolean }) {
         />
       </Suspense>
     </Canvas>
-  ), [rotateRight, modelError, handleModelError, modelUrl]);
+  );
 }
 
-// Separate component for the rotating model that uses the useFrame hook - No text
+// Simple rotating model component
 function RotatingModel({ url, rotateRight, onLoadFailed }: { 
   url: string, 
   rotateRight: boolean,
   onLoadFailed: () => void
 }) {
-  // Start with all refs and state declarations to maintain consistent Hook order
   const meshRef = useRef<THREE.Mesh>(null);
-  const [modelLoaded, setModelLoaded] = useState(false);
   
-  // Set up error handling callback
-  const handleError = useCallback((error: any) => {
-    console.error("Failed to load model:", error);
-    console.error("Model URL:", url);
+  // Load the model directly
+  let { scene } = useGLTF(url);
+  
+  // Handle errors
+  if (!scene) {
+    console.error("Failed to load model:", url);
     onLoadFailed();
-  }, [onLoadFailed, url]);
-  
-  // Use preload option to start loading before the component renders
-  useGLTF.preload(url);
-  
-  // Load the 3D model with better error handling
-  let scene: THREE.Group | undefined;
-  try {
-    const result = useGLTF(url, undefined, undefined, (error) => {
-      console.error('GLTF loader error:', error);
-      handleError(error);
-    });
-    scene = result.scene;
-  } catch (error) {
-    console.error('Error in useGLTF hook:', error);
-    handleError(error);
-  }
-  
-  // Always declare all hooks regardless of conditions to maintain hook order
-  // Handle errors through useEffect monitoring
-  useEffect(() => {
-    // Only try to access scene if the component is still mounted
-    let isMounted = true;
-    
-    if (scene && isMounted) {
-      console.log("Model loaded successfully:", url);
-      setModelLoaded(true);
-    } else if (isMounted) {
-      console.error("Error loading model: scene is undefined for URL:", url);
-      onLoadFailed();
-    }
-    
-    return () => { isMounted = false; };
-  }, [scene, url, onLoadFailed]);
-  
-  // Auto-rotation animation with specified direction
-  useFrame((state) => {
-    if (meshRef.current) {
-      // Rotate either clockwise or counter-clockwise based on the prop
-      meshRef.current.rotation.y += rotateRight ? 0.02 : -0.02;
-      
-      // Add a slight floating motion for visual interest
-      const time = state.clock.getElapsedTime();
-      meshRef.current.position.y = -0.2 + Math.sin(time * 0.8) * 0.05;
-    }
-  });
-  
-  // Create the model - ALWAYS call useMemo here to maintain hook order
-  const model = useMemo(() => {
-    if (!scene || !modelLoaded) {
-      return null;
-    }
-    
-    const clonedScene = scene.clone();
-    
-    return clonedScene;
-  }, [scene, modelLoaded]);
-  
-  // If no model is available yet, show nothing (loading state)
-  if (!model) {
     return null;
   }
   
-  // Render the actual model
+  // Simple rotation animation
+  useFrame(() => {
+    if (meshRef.current) {
+      meshRef.current.rotation.y += rotateRight ? 0.02 : -0.02;
+    }
+  });
+  
+  // Render the model
   return (
     <mesh 
       ref={meshRef}
       scale={[1.8, 1.8, 1.8]}
       position={[0, -0.2, 0]}
-      rotation={[0.1, 0, 0]}
     >
-      <primitive object={model} />
+      <primitive object={scene} />
     </mesh>
   );
 } 
