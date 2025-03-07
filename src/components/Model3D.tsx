@@ -231,106 +231,139 @@ function Model({
 }) {
   const [isPreloaded, setIsPreloaded] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [lastAttemptTime, setLastAttemptTime] = useState<number>(Date.now());
+  const [modelUrl, setModelUrl] = useState<string>('');
   
   // Get variant name based on the product ID
   const variantName = productId ? getCakeVariantName(Number(productId)) : 'nemo';
   
-  // Configure the DRACOLoader for useGLTF
+  // Set up model URL on first render
   useEffect(() => {
-    // Define the model URL
-    const modelUrl = `https://storage.googleapis.com/kgbakerycakes/optimized/${encodeURIComponent(variantName)}.glb`;
-    
-    // Set up DRACOLoader for the GLTFLoader that useGLTF will use
-    const dracoLoader = new DRACOLoader();
-    dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.5/');
-    dracoLoader.setDecoderConfig({ type: 'js' });
-    
-    // Configure GLTFLoader with DRACOLoader
-    const gltfLoader = new GLTFLoader();
-    gltfLoader.setDRACOLoader(dracoLoader);
-    
-    // Preload using the configured loader
-    useGLTF.preload(modelUrl);
-    
-    // Return cleanup function
-    return () => {
-      useGLTF.clear(modelUrl);
-    };
-  }, [variantName]);
+    const url = `https://storage.googleapis.com/kgbakerycakes/optimized/${encodeURIComponent(variantName)}.glb`;
+    console.log(`Setting up model URL: ${url} for product ${productId}`);
+    setModelUrl(url);
+  }, [variantName, productId]);
   
-  // Preload the model first before using it with useGLTF
+  // Setup DRACOLoader once
   useEffect(() => {
-    let isMounted = true;
+    if (!modelUrl) return;
     
-    // Check if we should force a reload (every 5 minutes)
-    const now = Date.now();
-    const fiveMinutes = 5 * 60 * 1000;
-    const shouldForceReload = now - lastAttemptTime > fiveMinutes;
+    // Configure the global useGLTF DRACOLoader
+    console.log(`Setting up DRACOLoader for ${modelUrl}`);
     
-    if (shouldForceReload) {
-      console.log(`Model ${variantName} has not been successfully loaded in over 5 minutes. Forcing cache invalidation.`);
-      setLastAttemptTime(now);
+    // Clear any previous preloads
+    try {
+      useGLTF.clear(modelUrl);
+    } catch (e) {
+      console.log("No previous model to clear");
     }
     
-    console.log(`Starting preload for model: ${variantName}`);
+    // Preload the model with the correct URL
+    useGLTF.preload(modelUrl);
     
-    preloader.preload(variantName)
-      .then(() => {
-        if (isMounted) {
-          console.log(`Model preloaded successfully: ${variantName}`);
-          setIsPreloaded(true);
+    return () => {
+      try {
+        useGLTF.clear(modelUrl);
+      } catch (e) {
+        // Ignore cleanup errors
+      }
+    };
+  }, [modelUrl]);
+  
+  // Use direct GLTFLoader for more control
+  useEffect(() => {
+    if (!modelUrl) return;
+    
+    console.log(`Starting direct load for model: ${modelUrl}`);
+    let isMounted = true;
+    
+    // Setup loaders
+    const dracoLoader = new DRACOLoader();
+    dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.5/');
+    
+    const loader = new GLTFLoader();
+    loader.setDRACOLoader(dracoLoader);
+    
+    // Add cache-busting parameter
+    const loadUrl = `${modelUrl}?t=${Date.now()}`;
+    
+    loader.load(
+      loadUrl,
+      (gltf) => {
+        if (!isMounted) return;
+        console.log(`Successfully loaded model: ${modelUrl}`);
+        setIsPreloaded(true);
+        // We'll set our loaded model in a useRef in the rendering section
+      },
+      (progress) => {
+        if (!isMounted) return;
+        if (progress.lengthComputable) {
+          const percent = Math.round((progress.loaded / progress.total) * 100);
+          console.log(`Loading ${modelUrl}: ${percent}%`);
         }
-      })
-      .catch((err) => {
-        if (isMounted) {
-          const errorMessage = `Error preloading model: ${err.message || 'Unknown error'}`;
-          console.error(errorMessage);
-          setError(errorMessage);
-          onError(errorMessage);
-        }
-      });
+      },
+      (error: any) => {
+        if (!isMounted) return;
+        const errorMsg = error.message || String(error);
+        console.error(`Error loading model ${modelUrl}: ${errorMsg}`);
+        setError(errorMsg);
+        onError(errorMsg);
+      }
+    );
     
     return () => {
       isMounted = false;
+      dracoLoader.dispose();
     };
-  }, [variantName, onError, lastAttemptTime]);
-
-  // Declare model loader to only use when preloaded
-  const groupRef = useRef<THREE.Group>(null);
+  }, [modelUrl, onError]);
   
-  // Only try to load with useGLTF when preloaded
-  const url = `https://storage.googleapis.com/kgbakerycakes/optimized/${encodeURIComponent(variantName)}.glb`;
+  // Ref to store our loaded model
+  const modelRef = useRef<THREE.Group | null>(null);
   
-  // Using a try-catch block to handle potential loading errors from useGLTF
-  let gltf;
+  // Access the gltf model - use a try/catch for safety
+  let gltf = null;
   try {
-    const loadedModel = useGLTF(url);
-    gltf = loadedModel.scene;
-  } catch (loadError) {
-    console.error(`Error in useGLTF: ${loadError}`);
-    gltf = null;
+    if (modelUrl && isPreloaded) {
+      const result = useGLTF(modelUrl);
+      gltf = result.scene;
+      console.log('useGLTF returned model:', result);
+    }
+  } catch (e) {
+    console.error('Error in useGLTF:', e);
+    // We'll continue with null gltf and show an empty group
   }
-
+  
   // Handle rotation animation
+  const groupRef = useRef<THREE.Group>(null);
   useFrame(() => {
     if (groupRef.current) {
       groupRef.current.rotation.y += rotationSpeed;
     }
   });
-
-  // Call onLoad once the model is ready
+  
+  // Notify parent when model is ready
   useEffect(() => {
     if (isPreloaded && gltf && !error) {
+      console.log('Model ready - calling onLoad');
       onLoad();
     }
   }, [isPreloaded, gltf, onLoad, error]);
-
+  
+  // Debug output
+  useEffect(() => {
+    console.log('Model render state:', { 
+      productId, 
+      variantName, 
+      isPreloaded, 
+      hasGltf: !!gltf, 
+      error 
+    });
+  }, [productId, variantName, isPreloaded, gltf, error]);
+  
   if (!isPreloaded || !gltf) {
-    // Return an empty group while loading
+    console.log(`Rendering empty group for ${variantName} - preloaded: ${isPreloaded}, hasGltf: ${!!gltf}`);
     return <group />;
   }
-
+  
   return (
     <group ref={groupRef} scale={[scale, scale, scale]}>
       <primitive object={gltf} />
