@@ -337,10 +337,10 @@ export default function HomePage() {
             {[1, 2, 3, 4, 5, 6, 7, 8].map((item) => (
               <React.Fragment key={`banh-left-${item}`}>
                 <div className="h-40 w-40 mx-4">
-                  <BanhMiModelSmall rotateRight={true} />
+                  <BanhMiModelSmall rotateRight={item % 2 === 0} />
                 </div>
                 <div className="flex items-center mx-4">
-                  <h3 className="text-5xl font-black text-black whitespace-nowrap font-playfair">
+                  <h3 className="text-5xl font-black text-black whitespace-nowrap font-rubik">
                     WE HAVE BANH MIS!
                   </h3>
                 </div>
@@ -374,7 +374,6 @@ function BanhMiModelSmall({ rotateRight }: { rotateRight: boolean }) {
         gl.setClearColor(0x000000, 0);
       }}
     >
-      {/* Removed background color */}
       <ambientLight intensity={0.8} />
       <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} intensity={1} castShadow />
       
@@ -384,14 +383,14 @@ function BanhMiModelSmall({ rotateRight }: { rotateRight: boolean }) {
   );
 }
 
-// Separate component for the rotating model that uses the useFrame hook
+// Separate component for the rotating model that uses the useFrame hook - No text
 function RotatingModel({ url, rotateRight }: { url: string, rotateRight: boolean }) {
   const meshRef = useRef<THREE.Mesh>(null);
   
   // Load the 3D model
   const { scene } = useGLTF(url);
   
-  // Auto-rotation animation with specified direction - useFrame must be inside a component that's a child of Canvas
+  // Auto-rotation animation with specified direction
   useFrame(() => {
     if (meshRef.current) {
       // Rotate either clockwise or counter-clockwise based on the prop
@@ -405,11 +404,20 @@ function RotatingModel({ url, rotateRight }: { url: string, rotateRight: boolean
     return scene.clone();
   }, [scene]);
   
+  // Log model status
+  useEffect(() => {
+    if (!scene) {
+      console.error("Failed to load Banh Mi model:", url);
+    } else {
+      console.log("Successfully loaded Banh Mi model:", url);
+    }
+  }, [scene, url]);
+  
   return (
     <mesh 
       ref={meshRef}
-      scale={[2.0, 2.0, 2.0]}
-      position={[0, 0, 0]}
+      scale={[1.8, 1.8, 1.8]}
+      position={[0, -0.2, 0]}
       rotation={[0.1, 0, 0]}
     >
       <primitive object={model} />
