@@ -6,8 +6,12 @@ import { mainLoaderActive } from './LoadingScreen';
 
 // Loading indicator component without text
 function ModelLoader() {
-  // Don't show if the main loader is active
-  if (mainLoaderActive) return null;
+  // Check if loader is actually visible in the DOM
+  const loaderElement = document.querySelector('[class*="fixed inset-0 z-"]');
+  const isLoaderVisible = !!loaderElement;
+  
+  // Don't show if the main loader is active and actually visible
+  if (mainLoaderActive && isLoaderVisible) return null;
   
   return (
     <Html center className="overflow-visible">
@@ -60,6 +64,22 @@ export default function Model3D({
   const [hasError, setHasError] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [retryCount, setRetryCount] = useState(0);
+  const [forceRender, setForceRender] = useState(false);
+  
+  // Check if loader is actually visible in the DOM
+  const loaderElement = document.querySelector('[class*="fixed inset-0 z-"]');
+  const isLoaderVisible = !!loaderElement;
+  
+  // If loader is not visible but flag is stuck, force render anyway
+  useEffect(() => {
+    if (mainLoaderActive && !isLoaderVisible) {
+      console.log(`Model3D: Loader not visible but flag is true, forcing render`);
+      const timer = setTimeout(() => {
+        setForceRender(true);
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [isLoaderVisible]);
   
   // Extract number from productId (if it exists)
   let idNumber = '1';
@@ -114,6 +134,12 @@ export default function Model3D({
       }, delay);
     }
   }, [retryCount]);
+  
+  // Skip rendering if the main loader is active and visible
+  if (mainLoaderActive && !forceRender && isLoaderVisible) {
+    console.log("Model3D: Skipping render due to active loader");
+    return null;
+  }
   
   return (
     <Suspense fallback={<ModelLoader />}>

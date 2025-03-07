@@ -299,20 +299,43 @@ export default function HomePage() {
   
   // Monitor loading screen state
   useEffect(() => {
-    if (!mainLoaderActive && !loaderDismissed) {
-      console.log("Loading screen dismissed, resetting WebGL contexts");
-      WebGLContextManager.resetContextCount();
-      setLoaderDismissed(true);
+    // Force the mainLoaderActive flag to false if it's stuck
+    if (!show3DModels) {
+      console.log("Checking loading screen state, mainLoaderActive:", mainLoaderActive);
       
-      // Wait a short delay after loader dismisses before showing 3D models
-      const timer = setTimeout(() => {
+      // Check if the loading screen element exists in the DOM
+      const loaderElement = document.querySelector('[class*="fixed inset-0 z-"]');
+      const isLoaderVisible = !!loaderElement;
+      
+      if (!isLoaderVisible && mainLoaderActive) {
+        console.log("Loading screen is not visible but mainLoaderActive is true, forcing to false");
+        // eslint-disable-next-line
+        (window as any).mainLoaderActive = false;
+      }
+      
+      if (!mainLoaderActive || !isLoaderVisible) {
+        console.log("Loading screen dismissed, enabling 3D models");
+        WebGLContextManager.resetContextCount();
+        setLoaderDismissed(true);
         setShow3DModels(true);
-        console.log("Enabling 3D models after loading screen dismissed");
-      }, 500);
-      
-      return () => clearTimeout(timer);
+      }
     }
-  }, [mainLoaderActive, loaderDismissed]);
+    
+    // Re-check every 500ms until models are shown
+    const checkInterval = setInterval(() => {
+      if (!show3DModels) {
+        const loaderElement = document.querySelector('[class*="fixed inset-0 z-"]');
+        if (!loaderElement) {
+          console.log("Loading screen no longer in DOM, enabling 3D models");
+          WebGLContextManager.resetContextCount();
+          setLoaderDismissed(true);
+          setShow3DModels(true);
+        }
+      }
+    }, 500);
+    
+    return () => clearInterval(checkInterval);
+  }, [show3DModels]);
   
   // Reset WebGL contexts when component unmounts
   useEffect(() => {
@@ -350,7 +373,7 @@ export default function HomePage() {
   return (
     <div className="container mx-auto px-4 pb-12">
       {/* Featured Product with 3D Model */}
-      {!loading && displayedProducts.length > 0 && show3DModels && (
+      {!loading && displayedProducts.length > 0 && (show3DModels || !mainLoaderActive) && (
         <section className="py-8 my-4">
           <div className="bg-gray-50 rounded-xl shadow-lg overflow-hidden">
             <div className="container mx-auto px-4 py-8">
@@ -566,9 +589,26 @@ function ModelCanvasInstance({
   const [modelError, setModelError] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [modelLoaded, setModelLoaded] = useState(false);
+  const [forceRender, setForceRender] = useState(false);
   
-  // Skip rendering if the main loader is active
-  if (mainLoaderActive) {
+  // Check if loader is actually visible in the DOM
+  const loaderElement = document.querySelector('[class*="fixed inset-0 z-"]');
+  const isLoaderVisible = !!loaderElement;
+  
+  // If loader is not visible but flag is stuck, force render anyway
+  useEffect(() => {
+    if (mainLoaderActive && !isLoaderVisible) {
+      console.log(`Model ${productId}: Loader not visible but flag is true, forcing render`);
+      const timer = setTimeout(() => {
+        setForceRender(true);
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [productId, isLoaderVisible]);
+  
+  // Skip rendering if the main loader is active and visible
+  if (mainLoaderActive && !forceRender && isLoaderVisible) {
+    console.log(`Model ${productId}: Skipping render due to active loader`);
     return null;
   }
   
@@ -595,12 +635,13 @@ function ModelCanvasInstance({
   
   // Handle WebGL context management
   useEffect(() => {
-    // Don't add context if loader is active
-    if (mainLoaderActive) return;
-    
     // Add the context when component mounts
-    WebGLContextManager.addContext();
-    console.log(`Canvas context added for product ${productId}`);
+    if (WebGLContextManager.canCreateContext()) {
+      WebGLContextManager.addContext();
+      console.log(`Canvas context added for product ${productId}`);
+    } else {
+      console.warn(`Cannot add context for product ${productId}, max contexts reached`);
+    }
     
     // Remove the context when component unmounts
     return () => {
@@ -617,6 +658,9 @@ function ModelCanvasInstance({
       </div>
     );
   }
+  
+  // Actually render the model
+  console.log(`Rendering 3D model for product ${productId}`);
   
   return (
     <Canvas
