@@ -360,7 +360,7 @@ export default function HomePage() {
         {/* Marquee Container - Single line only */}
         <div className="marquee-container relative w-full">
           {/* Single Marquee - Left to Right - FASTER speed - Reduced number of models */}
-          <div className="marquee-content flex animate-marquee-fast">
+          <div className="marquee-content flex animate-marquee-fast" style={{ paddingLeft: '100%' }}>
             {/* Further reduced the number of repetitions to prevent WebGL context issues */}
             {[1, 2].map((item) => (
               <React.Fragment key={`banh-left-${item}`}>
@@ -381,23 +381,19 @@ export default function HomePage() {
   );
 }
 
-// Smaller character model optimized for the marquee
+// Smaller Banh Mi model optimized for the marquee
 function BanhMiModelSmall({ rotateRight }: { rotateRight: boolean }) {
   // Minimal state management
   const [modelError, setModelError] = useState(false);
   
   // Simple error handler
   const handleModelError = () => {
-    console.error("Character model failed to load");
+    console.error("Banh Mi model failed to load");
     setModelError(true);
   };
   
-  // Using optimized model from the optimized directory - randomly choosing one
-  const characterModels = ['nemo.glb', 'princess.glb', 'spongebob1.glb', 'strawberry.glb', 'turkey.glb'];
-  // Create a deterministic "random" selection based on time of day to avoid excessive changing
-  const hourOfDay = new Date().getHours();
-  const modelIndex = hourOfDay % characterModels.length;
-  const modelUrl = `https://storage.googleapis.com/kgbakerycakes/optimized/${characterModels[modelIndex]}`;
+  // Use the correct Banh Mi model URL
+  const modelUrl = "https://storage.googleapis.com/kgbakerycakes/banhmi.glb";
   
   // Simple Canvas with minimal configuration
   return (
