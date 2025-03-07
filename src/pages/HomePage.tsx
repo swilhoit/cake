@@ -131,6 +131,7 @@ function ProductCard({ product }: { product: any }) {
   const { isMobile, shouldUseImages, dpr } = getDeviceCapabilities();
   const [retryCount, setRetryCount] = useState(0);
   const navigate = useNavigate();
+  const [isHovered, setIsHovered] = useState(false);
 
   // Extract product ID from the Shopify handle or use a default ID
   const productId = product.id ? parseInt(product.id.split('/').pop() || '1', 10) : 1;
@@ -206,12 +207,17 @@ function ProductCard({ product }: { product: any }) {
   };
 
   return (
-    <div onClick={goToProductPage} className="relative h-80 w-full cursor-pointer">
+    <div 
+      onClick={goToProductPage} 
+      className="relative h-80 w-full cursor-pointer overflow-visible" 
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
       {useFallbackImage ? (
         <img 
           src={getFallbackImageUrl()} 
           alt={product.title} 
-          className="w-full h-full object-contain"  
+          className={`w-full h-full object-contain transition-transform duration-300 ${isHovered ? 'scale-110' : ''}`}
         />
       ) : isVisible && (
         <Canvas
@@ -227,7 +233,8 @@ function ProductCard({ product }: { product: any }) {
           className="touch-auto"
           style={{ 
             background: 'transparent',
-            touchAction: 'none'
+            touchAction: 'none',
+            overflow: 'visible'
           }}
           onCreated={({ gl }) => {
             // Set clear color with full transparency
@@ -249,7 +256,7 @@ function ProductCard({ product }: { product: any }) {
             {!modelError ? (
               <>
                 <Model3D 
-                  scale={1.3} 
+                  scale={isHovered ? 1.5 : 1.3} 
                   rotationSpeed={isMobile ? 0.003 : 0.005} 
                   productId={productId} 
                 />
@@ -330,17 +337,17 @@ export default function HomePage() {
       </section>
       
       {/* Banh Mi Marquee Section with yellow background - Simplified to 1 line */}
-      <section className="py-4 bg-yellow-300 my-8 overflow-hidden">
+      <section className="py-4 bg-yellow-300 my-8 overflow-visible">
         <h2 className="sr-only">Banh Mi Section</h2>
         
         {/* Marquee Container - Single line only */}
-        <div className="marquee-container relative w-full">
+        <div className="marquee-container relative w-full overflow-visible">
           {/* Single Marquee - Left to Right - FASTER speed - Increased repetitions */}
-          <div className="marquee-content flex animate-marquee-fast" style={{ paddingLeft: '100%' }}>
+          <div className="marquee-content flex animate-marquee-fast overflow-visible" style={{ paddingLeft: '100%' }}>
             {/* Increased repetitions to 20 */}
             {Array.from({ length: 20 }).map((_, index) => (
               <React.Fragment key={`banh-left-${index}`}>
-                <div className="h-32 w-32 mx-2">
+                <div className="h-32 w-32 mx-2 overflow-visible">
                   <BanhMiModelSmall rotateRight={index % 2 === 0} />
                 </div>
                 <div className="flex items-center mx-2">
@@ -379,7 +386,10 @@ function BanhMiModelSmall({ rotateRight }: { rotateRight: boolean }) {
         antialias: true,
         alpha: true
       }}
-      style={{ background: 'transparent' }}
+      style={{ 
+        background: 'transparent',
+        overflow: 'visible'
+      }}
     >
       {/* Basic lighting */}
       <ambientLight intensity={0.8} />

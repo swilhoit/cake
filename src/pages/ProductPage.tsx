@@ -367,7 +367,7 @@ export default function ProductPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
         {/* Product Image/3D Model - ALWAYS use 3D model */}
         <div>
-          <div className="rounded-lg overflow-hidden h-[800px] relative">
+          <div className="rounded-lg overflow-visible h-[800px] relative">
             <Canvas
               camera={{ position: [0, 0, 4.2], fov: 35 }}
               dpr={dpr}
@@ -384,7 +384,8 @@ export default function ProductPage() {
                 height: '100%',
                 borderRadius: '0.5rem',
                 outline: 'none',
-                touchAction: 'none'
+                touchAction: 'none',
+                overflow: 'visible'
               }}
               className="touch-auto"
               onCreated={({ gl }) => {

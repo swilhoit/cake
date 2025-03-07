@@ -10,7 +10,7 @@ function ModelLoader() {
   if (mainLoaderActive) return null;
   
   return (
-    <Html center>
+    <Html center className="overflow-visible">
       <div className="flex flex-col items-center justify-center p-4 rounded-lg bg-white/70 backdrop-blur-sm shadow-lg">
         <div className="flex items-center justify-center">
           <img 
@@ -32,7 +32,7 @@ function ModelLoader() {
 // Error display component without text
 function ModelError({ message }: { message: string }) {
   return (
-    <Html center>
+    <Html center className="overflow-visible">
       <div className="flex flex-col items-center justify-center p-4 rounded-lg bg-white/70 backdrop-blur-sm shadow-lg">
         <div className="text-pink-500">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">

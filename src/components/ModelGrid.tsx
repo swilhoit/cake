@@ -69,77 +69,62 @@ function ModelError() {
 
 // ProductCard component with individual Canvas for each card
 function ProductCard({ product }: { product: typeof products[0] }) {
-  const [modelError, setModelError] = useState(false);
-  const [isVisible, setIsVisible] = useState(false);
+  const [hovered, setHovered] = useState(false);
   
-  // Check if running in a production environment
-  const isProduction = typeof window !== 'undefined' && 
-                      window.location.hostname.includes('vercel.app');
-  
-  // Only show the model after a short delay to ensure initial mount is complete
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsVisible(true);
-    }, isProduction ? 200 : 100); // Give more time in production
-    
-    return () => clearTimeout(timer);
-  }, [isProduction]);
-  
+  // Handle hover state
+  const handleMouseEnter = () => setHovered(true);
+  const handleMouseLeave = () => setHovered(false);
+
   return (
-    <div className="backdrop-blur-sm overflow-hidden flex flex-col rounded-lg transition-all duration-300 hover:shadow-lg">
-      {/* Further increased height for larger canvas - now taller at 80 (20rem) */}
-      <div className="relative h-80 w-full">
-        {isVisible && (
-          <Canvas
-            camera={{ position: [0, 0, 4.0], fov: 30 }}
-            dpr={[1, 1.5]} // Reduced DPR for better performance
-            gl={{ 
-              antialias: true,
-              alpha: true,
-              preserveDrawingBuffer: true,
-              powerPreference: 'default',
-              depth: true
-            }}
-            className="!touch-none" /* Fix for mobile touch handling */
-            onCreated={({ gl }) => {
-              // Set clear color with transparency
-              gl.setClearColor(0xffffff, 0);
-            }}
-            onError={() => setModelError(true)}
-          >
-            <color attach="background" args={["#ffffff00"]} />
-            <ambientLight intensity={0.8} />
-            <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} intensity={1} castShadow />
-            
-            <Suspense fallback={<ModelLoading />}>
-              {!modelError ? (
-                <>
-                  <Model3D scale={1.365} rotationSpeed={0.005} productId={product.id} />
-                  <Environment preset="city" />
-                </>
-              ) : (
-                <ModelError />
-              )}
-            </Suspense>
-            
-            <OrbitControls
-              enableZoom={false}
-              maxPolarAngle={Math.PI / 2}
-              minPolarAngle={0}
-              rotateSpeed={0.5}
-              enableDamping={false}
+    <div 
+      className="bg-white rounded-lg shadow-lg overflow-visible"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      {/* Product Information */}
+      <div className="p-4">
+        <h3 className="text-lg font-medium text-gray-900">{product.name}</h3>
+        <p className="text-gray-500 text-sm">{product.price}</p>
+      </div>
+      
+      {/* 3D Model */}
+      <div className="h-64 w-full relative overflow-visible">
+        <Canvas 
+          camera={{ position: [0, 0, 3.5], fov: 35 }}  
+          style={{ 
+            background: 'transparent',
+            overflow: 'visible'
+          }}
+        >
+          <ambientLight intensity={0.5} />
+          <pointLight position={[10, 10, 10]} />
+          
+          <Suspense fallback={<ModelLoading />}>
+            <Model3D 
+              scale={hovered ? 1.2 : 1} 
             />
-          </Canvas>
-        )}
+          </Suspense>
+          
+          <OrbitControls 
+            enableZoom={false}
+            enablePan={false}
+            minPolarAngle={Math.PI / 4}
+            maxPolarAngle={Math.PI / 2}
+          />
+        </Canvas>
       </div>
-      <div className="p-4 flex-grow">
-        <h3 className="text-lg font-semibold text-gray-800">{product.name}</h3>
-        <p className="text-green-600 font-medium mt-1">{product.price}</p>
-        <p className="text-gray-600 text-sm mt-2 line-clamp-2">{product.description}</p>
+      
+      {/* Product Description */}
+      <div className="p-4">
+        <p className="text-gray-600 text-sm">{product.description}</p>
       </div>
+      
+      {/* Call to Action Button */}
       <div className="px-4 pb-4">
-        <button className="w-full bg-blue-600/80 hover:bg-blue-700 text-white py-2 rounded-md transition">
-          Add to Cart
+        <button 
+          className="w-full py-2 px-4 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-opacity-75"
+        >
+          View Details
         </button>
       </div>
     </div>
