@@ -112,7 +112,7 @@ function ModelLoadingFallback() {
   );
 }
 
-// Product card with 3D model
+// Product card with 3D model - text removed and hover effect added
 function ProductCard({ 
   product, 
   forceVisible = true 
@@ -120,9 +120,9 @@ function ProductCard({
   product: any, 
   forceVisible?: boolean 
 }) {
-  const { addToCart } = useShopContext();
   const [modelError, setModelError] = useState(false);
   const [useFallbackImage, setUseFallbackImage] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
   const { isMobile, shouldUseImages, dpr } = getDeviceCapabilities();
   
   // Extract product ID from the Shopify handle
@@ -135,11 +135,6 @@ function ProductCard({
       setUseFallbackImage(true);
     }
   }, [shouldUseImages]);
-  
-  // Log model ID for debugging
-  useEffect(() => {
-    console.log(`Product "${product.title}" using 3D model ID: ${productId}`);
-  }, [product.title, productId]);
 
   // Simple error handler
   const handleModelError = () => {
@@ -157,17 +152,30 @@ function ProductCard({
     return `/images/cake-${(productId % 4) + 1}.jpg`;
   };
 
+  // Calculate model scale based on hover state with a much more dramatic effect
+  const modelScale = isHovered ? 2.5 : 1.3;
+  
+  // Calculate z-index for layering (hovered items should appear on top)
+  const zIndex = isHovered ? 50 : 10;
+
   return (
-    <div className="backdrop-blur-sm overflow-hidden flex flex-col border border-gray-200/20 rounded-lg transition-all duration-300 hover:border-blue-300/30">
+    <Link 
+      to={`/product/${product.id.split('/').pop()}`}
+      style={{ zIndex: zIndex }}
+      className="backdrop-blur-sm block rounded-lg transition-all duration-1000 ease-in-out border border-transparent hover:border-gray-200/30 relative"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
       {/* 3D Model or Fallback Image */}
-      <div className="relative h-80 w-full">
+      <div className="relative h-96 w-full overflow-visible"
+           style={{ transformStyle: 'preserve-3d' }}>
         {useFallbackImage ? (
           // Fallback image for mobile or low-end devices
           <div className="w-full h-full bg-gray-100">
             <img 
               src={getFallbackImageUrl()} 
               alt={product.title}
-              className="w-full h-full object-cover"
+              className={`w-full h-full object-cover transition-transform duration-500 ease-in-out ${isHovered ? 'scale-115' : ''}`}
               onError={(e) => {
                 // If the image fails to load, use a very simple colored div as fallback
                 const target = e.target as HTMLImageElement;
@@ -179,13 +187,24 @@ function ProductCard({
         ) : (
           // Always render Canvas for 3D models
           <Canvas
-            camera={{ position: [0, 0, 4.0], fov: 30 }}
+            camera={{ position: [0, 0, 6.0], fov: 35 }}
             dpr={dpr}
-            className="!touch-none" /* Fix for mobile touch handling */
+            className="!touch-none"
             frameloop={isMobile ? "demand" : "always"} // Only render on demand for mobile
+            style={{ 
+              position: 'absolute',
+              width: '100%',
+              height: '100%',
+              overflow: 'visible',
+              pointerEvents: 'none' 
+            }}
             onCreated={({ gl }) => {
               // Optimize WebGL context
               gl.setClearColor(new THREE.Color('#f8f9fa'), 0);
+              
+              // Add transparency to the WebGLRenderer
+              gl.setClearAlpha(0);
+              
               if ('physicallyCorrectLights' in gl) {
                 (gl as any).physicallyCorrectLights = true;
               }
@@ -196,12 +215,11 @@ function ProductCard({
                   (gl as any).powerPreference = "low-power";
                 }
               }
-              console.log(`Creating WebGL context for product ${productId}`);
             }}
             onError={handleModelError}
           >
-            <ambientLight intensity={0.8} />
-            <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} intensity={1} castShadow={!isMobile} />
+            <ambientLight intensity={isHovered ? 1.2 : 0.8} />
+            <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} intensity={isHovered ? 1.5 : 1} castShadow={!isMobile} />
             
             <Suspense fallback={
               <ModelLoadingFallback />
@@ -209,8 +227,8 @@ function ProductCard({
               {!modelError ? (
                 <>
                   <Model3D 
-                    scale={1.3} 
-                    rotationSpeed={isMobile ? 0.003 : 0.005} 
+                    scale={modelScale} 
+                    rotationSpeed={isMobile ? 0.003 : (isHovered ? 0.002 : 0.004)} 
                     productId={productId} 
                   />
                   {!isMobile && <Environment preset="city" />}
@@ -237,16 +255,7 @@ function ProductCard({
           </Canvas>
         )}
       </div>
-      
-      {/* Product Information */}
-      <div className="p-4 flex-grow">
-        <Link to={`/product/${product.id.split('/').pop()}`}>
-          <h3 className="text-lg font-semibold text-gray-800 hover:text-indigo-600">{product.title}</h3>
-        </Link>
-        <p className="text-green-600 font-medium mt-1">${product.variants[0].price}</p>
-        <p className="text-gray-600 text-sm mt-2 line-clamp-2">{product.description}</p>
-      </div>
-    </div>
+    </Link>
   );
 }
 
@@ -464,19 +473,10 @@ export default function HomePage() {
   return (
     <div className="overflow-x-hidden">
       <div className="container mx-auto px-4 py-8">
-        {/* Featured Cake removed */}
-        
-        <ElementAnimation delay={100} direction="top">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-800 text-center">Our Collection</h1>
-            <p className="text-gray-600 mt-2 text-center">
-              Browse our premium custom cakes and bakery items
-            </p>
-          </div>
-        </ElementAnimation>
+        {/* Title removed */}
         
         {/* Products Grid with staggered animations */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-16 gap-y-28 mt-6 pt-8">
           {displayedProducts.slice(0, 6).map((product: any, index) => ( // Only show first 6 products
             <ElementAnimation 
               key={product.id} 

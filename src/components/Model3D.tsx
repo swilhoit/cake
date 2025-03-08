@@ -141,6 +141,20 @@ export default function Model3D({
         ]}
         position={[0, isDetailView ? variantProps.detailPositionY : variantProps.positionY, 0]}
         rotation={[variantProps.tiltX, 0, variantProps.tiltZ]}
+        // Add smooth transition for dramatic scaling
+        onUpdate={(self) => {
+          // Apply smooth transitions to the scale
+          if (self.scale.x !== scale * variantProps.baseScale) {
+            self.scale.lerp(
+              new THREE.Vector3(
+                scale * variantProps.baseScale,
+                scale * variantProps.baseScale,
+                scale * variantProps.baseScale
+              ),
+              0.05
+            );
+          }
+        }}
       >
         <Cake 
           modelPath={modelPath} 
